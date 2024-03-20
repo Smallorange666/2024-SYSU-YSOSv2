@@ -3,6 +3,7 @@ mod clock;
 mod consts;
 mod exceptions;
 mod serial;
+mod syscall;
 
 pub use clock::read_counter;
 
@@ -17,6 +18,7 @@ lazy_static! {
             exceptions::register_idt(&mut idt);
             clock::register_idt(&mut idt);
             serial::register_idt(&mut idt);
+            syscall::register_idt(&mut idt);
         }
         idt
     };

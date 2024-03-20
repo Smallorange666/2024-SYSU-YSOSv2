@@ -7,11 +7,14 @@ mod process;
 mod processor;
 
 use crate::memory::PAGE_SIZE;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 pub use manager::*;
 use process::*;
+use xmas_elf::ElfFile;
 
 use alloc::string::{String, ToString};
-pub use context::ProcessContext;
+pub use context::{cal_pid_from_stackframe, ProcessContext};
 pub use data::ProcessData;
 pub use paging::PageTableContext;
 pub use pid::ProcessId;
@@ -50,7 +53,7 @@ pub enum ProgramStatus {
 }
 
 /// init process manager
-pub fn init() {
+pub fn init(boot_info: &'static boot::BootInfo) {
     let mut kproc_data = ProcessData::new();
     trace!("Init process data: {:#?}", kproc_data);
     // set the kernel stack
@@ -65,7 +68,10 @@ pub fn init() {
         PageTableContext::new(),
         Some(kproc_data),
     );
-    manager::init(kproc);
+
+    // app_list
+    let app_list = boot_info.loaded_apps.as_ref();
+    manager::init(kproc, app_list);
 
     info!("Process Manager Initialized.");
 }
@@ -79,13 +85,17 @@ pub fn switch(context: &mut ProcessContext) {
     });
 }
 
-pub fn spawn_kernel_thread(entry: fn() -> !, name: String, data: Option<ProcessData>) -> ProcessId {
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        let entry = VirtAddr::new(entry as usize as u64);
-        trace!("entry:{:#x?}", entry);
-        get_process_manager().spawn_kernel_thread(entry, name, data)
-    })
-}
+// pub fn spawn_kernel_thread(
+//     entry: fn() -> (),
+//     name: String,
+//     data: Option<ProcessData>,
+// ) -> ProcessId {
+//     x86_64::instructions::interrupts::without_interrupts(|| {
+//         let entry = VirtAddr::new(entry as usize as u64);
+//         trace!("entry:{:#x?}", entry);
+//         get_process_manager().spawn_kernel_thread(entry, name, data)
+//     })
+// }
 
 pub fn print_process_list() {
     x86_64::instructions::interrupts::without_interrupts(|| {
@@ -113,5 +123,76 @@ pub fn process_exit(ret: isize) -> ! {
 pub fn handle_page_fault(addr: VirtAddr, err_code: PageFaultErrorCode) -> bool {
     x86_64::instructions::interrupts::without_interrupts(|| {
         get_process_manager().handle_page_fault(addr, err_code)
+    })
+}
+
+pub fn list_app() {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let app_list = get_process_manager().app_list();
+        if app_list.is_none() {
+            println!("[!] No app found in list!");
+            return;
+        }
+
+        let apps = app_list
+            .unwrap()
+            .iter()
+            .map(|app| app.name.as_str())
+            .collect::<Vec<&str>>()
+            .join(", ");
+
+        // print more information like size, entry point, etc.
+        println!("[+] App list: {}", apps);
+        for app in app_list.unwrap() {
+            println!(" {} ", app.name.as_str());
+            println!("- entry: {:#x}", app.elf.header.pt2.entry_point());
+            println!("- size: {} bytes", app.elf.input.len());
+        }
+    });
+}
+
+pub fn spawn(name: &str) -> Option<ProcessId> {
+    let app = x86_64::instructions::interrupts::without_interrupts(|| {
+        let app_list = get_process_manager().app_list()?;
+        app_list.iter().find(|&app| app.name.eq(name))
+    })?;
+
+    elf_spawn(name.to_string(), &app.elf)
+}
+
+pub fn elf_spawn(name: String, elf: &ElfFile) -> Option<ProcessId> {
+    let pid = x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        let process_name = name.to_lowercase();
+        let parent = Arc::downgrade(&manager.current());
+        let pid = manager.spawn(elf, name, Some(parent), None);
+
+        debug!("Spawned process: {}#{}", process_name, pid);
+        pid
+    });
+
+    Some(pid)
+}
+
+pub fn read(fd: u8, buf: &mut [u8]) -> isize {
+    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().read(fd, buf))
+}
+
+pub fn write(fd: u8, buf: &[u8]) -> isize {
+    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().write(fd, buf))
+}
+
+pub fn exit(ret: isize, context: &mut ProcessContext) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        manager.kill_self(ret);
+        manager.switch_next(context);
+    })
+}
+
+#[inline]
+pub fn still_alive(pid: ProcessId) -> bool {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        get_process_manager().is_proc_alive(&pid)
     })
 }

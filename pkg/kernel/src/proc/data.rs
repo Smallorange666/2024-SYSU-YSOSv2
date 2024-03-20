@@ -5,6 +5,8 @@ use x86_64::{
     VirtAddr,
 };
 
+use crate::resource::*;
+
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -14,6 +16,9 @@ pub struct ProcessData {
 
     // process specific data
     pub(super) stack_segment: Option<PageRange>,
+
+    // file descriptors table
+    pub(super) resources: Arc<RwLock<ResourceSet>>,
 }
 
 impl Default for ProcessData {
@@ -21,6 +26,7 @@ impl Default for ProcessData {
         Self {
             env: Arc::new(RwLock::new(BTreeMap::new())),
             stack_segment: None,
+            resources: Arc::new(RwLock::new(ResourceSet::default())),
         }
     }
 }
@@ -46,5 +52,13 @@ impl ProcessData {
     pub fn is_on_stack(&self, addr: VirtAddr) -> bool {
         VirtAddr::new(addr.as_u64() & STACK_START_MASK)
             == self.stack_segment.unwrap().end.start_address() - STACK_MAX_SIZE
+    }
+
+    pub fn read(&self, fd: u8, buf: &mut [u8]) -> isize {
+        self.resources.read().read(fd, buf)
+    }
+
+    pub fn write(&self, fd: u8, buf: &[u8]) -> isize {
+        self.resources.read().write(fd, buf)
     }
 }

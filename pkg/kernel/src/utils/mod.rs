@@ -5,9 +5,9 @@ mod regs;
 
 pub mod func;
 pub mod logger;
+pub mod resource;
 
 use crate::proc::*;
-use alloc::format;
 pub use macros::*;
 pub use regs::*;
 
@@ -25,29 +25,28 @@ pub const fn get_ascii_header() -> &'static str {
     )
 }
 
-pub fn new_test_thread(id: &str) -> ProcessId {
-    trace!("New test thread: {}", id);
-    let mut proc_data = ProcessData::new();
-    proc_data.set_env("id", id);
+// pub fn new_test_thread(id: &str) -> ProcessId {
+//     trace!("New test thread: {}", id);
+//     let mut proc_data = ProcessData::new();
+//     proc_data.set_env("id", id);
 
-    spawn_kernel_thread(func::test, format!("#{}_test", id), Some(proc_data))
-}
+//     spawn_kernel_thread(func::test, format!("#{}_test", id), Some(proc_data))
+// }
 
-pub fn new_stack_test_thread() {
-    trace!("new_stack_test_thread");
-    let pid = spawn_kernel_thread(func::stack_test, alloc::string::String::from("stack"), None);
+// pub fn new_stack_test_thread() {
+//     trace!("new_stack_test_thread");
+//     let pid = spawn_kernel_thread(func::stack_test, alloc::string::String::from("stack"), None);
 
-    // wait for progress exit
-    wait(pid);
-    trace!("stack_test_thread exit");
-}
+//     // wait for progress exit
+//     wait(pid);
+//     trace!("stack_test_thread exit");
+// }
 
-fn wait(pid: ProcessId) {
+pub fn wait(pid: ProcessId) {
     loop {
         // try to get the status of the process
         let exit_code = get_process_manager().get_exit_code(&pid);
-
-        if exit_code.is_some() {
+        if exit_code.is_none() {
             x86_64::instructions::hlt();
         } else {
             break;

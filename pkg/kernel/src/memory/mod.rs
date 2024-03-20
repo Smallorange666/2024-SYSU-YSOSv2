@@ -3,6 +3,7 @@ pub mod allocator;
 mod frames;
 
 pub mod gdt;
+pub mod user;
 
 pub use address::*;
 pub use frames::*;
@@ -32,6 +33,8 @@ pub fn init(boot_info: &'static boot::BootInfo) {
             usable_mem_size as usize,
         ));
     }
+
+    user::init();
 
     info!("Frame Allocator initialized.");
 }

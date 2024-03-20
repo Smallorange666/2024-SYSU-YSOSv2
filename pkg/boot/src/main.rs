@@ -40,6 +40,15 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         xmas_elf::ElfFile::new(load_file(bs, &mut file)).unwrap()
     };
 
+    // Load apps according to config.load_apps
+    let apps = if config.load_apps {
+        info!("Loading apps...");
+        Some(load_apps(system_table.boot_services()))
+    } else {
+        info!("Skip loading apps");
+        None
+    };
+
     unsafe {
         set_entry(elf.header.pt2.entry_point() as usize);
     }
@@ -82,6 +91,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         config.physical_memory_offset,
         &mut page_table,
         &mut frame_allocator,
+        false,
     )
     .expect("");
 
@@ -91,6 +101,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         config.kernel_stack_size,
         &mut page_table,
         &mut frame_allocator,
+        false,
     )
     .expect("");
 
@@ -113,6 +124,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         physical_memory_offset: config.physical_memory_offset,
         system_table: runtime,
         log_level: config.log_level,
+        loaded_apps: apps,
     };
 
     // Align stack to 8 bytes

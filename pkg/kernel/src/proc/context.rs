@@ -1,7 +1,9 @@
 use volatile::{access::ReadOnly, VolatileRef};
 use x86_64::{registers::rflags::RFlags, structures::idt::InterruptStackFrameValue, VirtAddr};
 
-use crate::{memory::gdt::get_selector, RegistersValue};
+use crate::{
+    memory::gdt::get_user_selector, RegistersValue, STACK_MAX, STACK_MAX_SIZE, STACK_START_MASK,
+};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -14,6 +16,11 @@ pub struct ProcessContextValue {
 #[derive(Clone, Copy, Default)]
 pub struct ProcessContext {
     value: ProcessContextValue,
+}
+
+pub fn cal_pid_from_stackframe(stack_frame: &InterruptStackFrameValue) -> u16 {
+    let rsp = stack_frame.clone().stack_pointer;
+    ((STACK_MAX - (rsp.as_u64() & STACK_START_MASK)) / STACK_MAX_SIZE) as u16
 }
 
 impl ProcessContext {
@@ -42,15 +49,19 @@ impl ProcessContext {
         context.as_mut().as_mut_ptr().write(self.value);
     }
 
+    pub fn stack_frame(&self) -> &InterruptStackFrameValue {
+        &self.value.stack_frame
+    }
+
     pub fn init_stack_frame(&mut self, entry: VirtAddr, stack_top: VirtAddr) {
         self.value.stack_frame.stack_pointer = stack_top;
         self.value.stack_frame.instruction_pointer = entry;
         self.value.stack_frame.cpu_flags =
             (RFlags::IOPL_HIGH | RFlags::IOPL_LOW | RFlags::INTERRUPT_FLAG).bits();
 
-        let selector = get_selector();
-        self.value.stack_frame.code_segment = selector.code_selector.0 as u64;
-        self.value.stack_frame.stack_segment = selector.data_selector.0 as u64;
+        let selector = get_user_selector();
+        self.value.stack_frame.code_segment = selector.user_code_selector.0 as u64;
+        self.value.stack_frame.stack_segment = selector.user_data_selector.0 as u64;
 
         trace!("Init stack frame: {:#?}", &self.stack_frame);
     }

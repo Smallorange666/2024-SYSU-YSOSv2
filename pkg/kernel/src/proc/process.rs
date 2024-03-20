@@ -8,6 +8,7 @@ use alloc::sync::Weak;
 use alloc::vec::Vec;
 use elf::map_range;
 use spin::*;
+use x86_64::structures::paging::mapper::MapToError;
 use x86_64::structures::paging::page::PageRange;
 use x86_64::structures::paging::*;
 use x86_64::VirtAddr;
@@ -102,6 +103,7 @@ impl Process {
             STACK_DEF_PAGE,
             &mut page_table,
             frame_allocator,
+            true,
         )
         .expect("");
 
@@ -138,7 +140,14 @@ impl Process {
 
         let mut page_table = self.read().page_table.as_ref().unwrap().mapper();
         let frame_allocator = &mut *get_frame_alloc_for_sure();
-        map_range(stack_bottom, new_page_num, &mut page_table, frame_allocator).expect("");
+        map_range(
+            stack_bottom,
+            new_page_num,
+            &mut page_table,
+            frame_allocator,
+            true,
+        )
+        .expect("");
 
         self.write()
             .proc_data
@@ -218,9 +227,27 @@ impl ProcessInner {
         self.exit_code = Some(ret);
         // set status to dead
         self.status = ProgramStatus::Dead;
+
         // take and drop unused resources
-        self.proc_data = None;
-        self.page_table = None;
+        self.proc_data.take();
+        self.page_table.take();
+    }
+
+    pub fn load_elf(
+        &mut self,
+        elf: &ElfFile,
+        physical_offset: u64,
+        frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+        user_access: bool,
+    ) -> Result<(), MapToError<Size4KiB>> {
+        let mut page_table = self.page_table.as_ref().unwrap().mapper();
+        elf::load_elf(
+            elf,
+            physical_offset,
+            &mut page_table,
+            frame_allocator,
+            user_access,
+        )
     }
 }
 

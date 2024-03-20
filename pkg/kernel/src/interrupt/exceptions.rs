@@ -1,4 +1,4 @@
-use crate::{memory::*, STACK_MAX, STACK_MAX_SIZE, STACK_START_MASK};
+use crate::memory::*;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
@@ -143,6 +143,7 @@ pub extern "x86-interrupt" fn general_protection_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) {
+    x86_64::instructions::interrupts::disable();
     panic!(
         "EXCEPTION: GENERAL PROTECTION FAULT, ERROR_CODE: 0x{:016x}\n\n{:#?}",
         error_code, stack_frame
@@ -161,8 +162,7 @@ pub extern "x86-interrupt" fn page_fault_handler(
             stack_frame
         );
         // print info about which process causes page fault?
-        let rsp = stack_frame.clone().stack_pointer;
-        let pid = (STACK_MAX - (rsp.as_u64() & STACK_START_MASK)) / STACK_MAX_SIZE;
+        let pid = crate::proc::cal_pid_from_stackframe(&stack_frame);
 
         panic!("Cannot handle process {} 's page fault! ", pid);
     }

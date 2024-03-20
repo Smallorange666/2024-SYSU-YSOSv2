@@ -3,11 +3,13 @@ use core::sync::atomic::{AtomicU16, Ordering};
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProcessId(pub u16);
 
-static COUNTER: AtomicU16 = AtomicU16::new(1);
+static COUNTER: AtomicU16 = AtomicU16::new(0);
 
 impl ProcessId {
     pub fn new() -> Self {
-        ProcessId(COUNTER.fetch_add(1, Ordering::SeqCst))
+        COUNTER.fetch_add(1, Ordering::SeqCst);
+        info!("New ProcessId: {}", COUNTER.load(Ordering::SeqCst));
+        ProcessId(COUNTER.load(Ordering::SeqCst))
     }
 }
 

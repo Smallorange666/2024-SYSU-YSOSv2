@@ -30,6 +30,7 @@ pub mod interrupt;
 pub mod memory;
 pub mod proc;
 pub use proc::*;
+pub use resource;
 
 pub use alloc::format;
 use boot::BootInfo;
@@ -40,7 +41,7 @@ pub fn init(boot_info: &'static BootInfo) {
     memory::address::init(boot_info);
     memory::gdt::init(); // init gdt
     memory::allocator::init(); // init kernel heap allocator
-    proc::init();
+    proc::init(boot_info);
     interrupt::init(); // init interrupts
     memory::init(boot_info); // init memory manager
     x86_64::instructions::interrupts::enable();
@@ -57,5 +58,15 @@ pub fn shutdown(boot_info: &'static BootInfo) -> ! {
             boot::UefiStatus::SUCCESS,
             None,
         );
+    }
+}
+
+pub fn wait(init: proc::ProcessId) {
+    loop {
+        if proc::still_alive(init) {
+            x86_64::instructions::hlt(); // Why? Check reflection question 5
+        } else {
+            break;
+        }
     }
 }

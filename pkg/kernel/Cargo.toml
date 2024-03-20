@@ -19,3 +19,5 @@ libm = "0.2"
 linked_list_allocator = "0.10"
 volatile = "0.5"
 elf = { package = "ysos_elf", path = "../elf" }
+xmas-elf = "0.9"
+syscall_def = { package = "ysos_syscall", path = "../syscall" }

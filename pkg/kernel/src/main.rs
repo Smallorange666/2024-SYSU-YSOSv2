@@ -4,33 +4,17 @@
 use ysos::*;
 use ysos_kernel as ysos;
 
-extern crate alloc;
-
 boot::entry_point!(kernel_main);
 
 pub fn kernel_main(boot_info: &'static boot::BootInfo) -> ! {
     ysos::init(boot_info);
-
-    let mut test_num = 0;
-
-    loop {
-        print!("[>] ");
-        let line = input::get_line();
-        match line.trim() {
-            "exit" => break,
-            "ps" => {
-                ysos::proc::print_process_list();
-            }
-            "stack" => {
-                ysos::new_stack_test_thread();
-            }
-            "test" => {
-                ysos::new_test_thread(format!("{}", test_num).as_str());
-                test_num += 1;
-            }
-            _ => println!("[=] {}", line),
-        }
-    }
-
+    ysos::wait(spawn_init());
     ysos::shutdown(boot_info);
+}
+
+pub fn spawn_init() -> proc::ProcessId {
+    // NOTE: you may want to clear the screen before starting the shell
+    print!("\x1b[1;1H\x1b[2J");
+    proc::list_app();
+    proc::spawn("sh").unwrap()
 }
