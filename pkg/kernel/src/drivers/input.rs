@@ -1,26 +1,21 @@
 use alloc::string::String;
 use crossbeam_queue::ArrayQueue;
-use x86_64::instructions::interrupts;
+use lazy_static::lazy_static;
 
-once_mutex!(pub INPUT_BUFFER: ArrayQueue<u8>);
-
-pub fn init() {
-    init_INPUT_BUFFER(ArrayQueue::new(128));
-    info!("Input Buffer initialized.");
+type Key = u8;
+lazy_static! {
+    static ref INPUT_BUF: ArrayQueue<Key> = ArrayQueue::new(128);
 }
 
-guard_access_fn!(pub get_input_buffer(INPUT_BUFFER: ArrayQueue<u8>));
-
-pub fn push_key(data: u8) {
-    if let Some(buffer) = get_input_buffer() {
-        if buffer.push(data).is_err() {
-            warn!("INPUT_BUFFER is full");
-        }
+pub fn push_key(key: Key) {
+    if INPUT_BUF.push(key).is_err() {
+        warn!("Input buffer is full. Dropping key '{:?}'", key);
     }
 }
 
-pub fn try_pop_key() -> Option<u8> {
-    interrupts::without_interrupts(|| get_input_buffer_for_sure().pop())
+#[inline]
+pub fn try_pop_key() -> Option<Key> {
+    INPUT_BUF.pop()
 }
 
 pub fn pop_key() -> u8 {
@@ -46,9 +41,41 @@ pub fn get_line() -> String {
                 line.pop();
             }
             _ => {
-                line.push(ch as char);
-                print!("{}", ch as char);
+                if is_utf8(ch) {
+                    let utf_char = char::from_u32(to_utf8(ch)).unwrap();
+                    line.push(utf_char);
+                    print! {"{}", utf_char};
+                } else {
+                    line.push(ch as char);
+                    print!("{}", ch as char);
+                }
             }
         }
     }
+}
+
+pub fn is_utf8(ch: u8) -> bool {
+    ch & 0x80 == 0 || ch & 0xE0 == 0xC0 || ch & 0xF0 == 0xE0 || ch & 0xF8 == 0xF0
+}
+
+pub fn to_utf8(ch: u8) -> u32 {
+    let mut codepoint = 0;
+
+    if ch & 0x80 == 0 {
+        codepoint = ch as u32;
+    } else if ch & 0xE0 == 0xC0 {
+        codepoint = ((ch & 0x1F) as u32) << 6;
+        codepoint |= (pop_key() & 0x3F) as u32;
+    } else if ch & 0xF0 == 0xE0 {
+        codepoint = ((ch & 0x0F) as u32) << 12;
+        codepoint |= ((pop_key() & 0x3F) as u32) << 6;
+        codepoint |= (pop_key() & 0x3F) as u32;
+    } else if ch & 0xF8 == 0xF0 {
+        codepoint = ((ch & 0x07) as u32) << 18;
+        codepoint |= ((pop_key() & 0x3F) as u32) << 12;
+        codepoint |= ((pop_key() & 0x3F) as u32) << 6;
+        codepoint |= (pop_key() & 0x3F) as u32;
+    }
+
+    codepoint
 }

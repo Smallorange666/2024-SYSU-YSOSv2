@@ -8,6 +8,7 @@ pub fn init() {
     init_SERIAL(SerialPort::new(SERIAL_IO_PORT));
     get_serial_for_sure().init();
 
+    // print!("\x1bc"); // clear screen
     println!("{}", crate::get_ascii_header());
     println!("[+] Serial Initialized.");
 }

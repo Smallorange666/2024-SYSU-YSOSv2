@@ -12,6 +12,15 @@ pub struct SerialPort {
     scratch: Port<u8>,
 }
 
+bitflags! {
+    struct LineControl:u8{
+        const DLAB=0b10000000;
+        const OneStopBit=0b00000000;
+        const NoneParity=0b00000000;
+        const EightCharLength=0b00000011;
+    }
+}
+
 impl SerialPort {
     pub const fn new(port: u16) -> Self {
         Self {
@@ -28,10 +37,13 @@ impl SerialPort {
     pub fn init(&mut self) {
         unsafe {
             self.interrupt_enable.write(0x00); // Disable all interrupts
-            self.line_control.write(0x80); // Enable DLAB (set baud rate divisor)
+            self.line_control.write(LineControl::DLAB.bits()); // Enable DLAB (set baud rate divisor)
             self.data.write(0x03); // Set divisor to 3 (lo byte) 38400 baud
             self.interrupt_enable.write(0x00); // Set divisor to 3 (hi byte) 38400 baud
-            self.line_control.write(0x03); // 8 bits, no parity, one stop bit
+            self.line_control.write(
+                (LineControl::EightCharLength | LineControl::NoneParity | LineControl::OneStopBit)
+                    .bits(),
+            ); // 8 bits, no parity, one stop bit
             self.interrupt_identification_fifo_control.write(0xC7); // Enable FIFO, clear them, with 14-byte threshold
             self.scratch.write(0xAE);
             self.interrupt_enable.write(0x01);

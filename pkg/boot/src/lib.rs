@@ -28,7 +28,7 @@ extern crate log;
 pub type MemoryMap = ArrayVec<MemoryDescriptor, 256>;
 
 /// This structure represents the information that the bootloader passes to the kernel.
-pub struct BootInfo {
+pub struct BootInfo<'a> {
     /// The memory map
     pub memory_map: MemoryMap,
 
@@ -37,6 +37,9 @@ pub struct BootInfo {
 
     /// UEFI SystemTable
     pub system_table: SystemTable<Runtime>,
+
+    /// log level of kernel
+    pub log_level: &'a str,
 }
 
 /// Get current page table from CR3
@@ -56,7 +59,7 @@ static mut ENTRY: usize = 0;
 /// This function is unsafe because the caller must ensure that the kernel entry point is valid.
 pub unsafe fn jump_to_entry(bootinfo: *const BootInfo, stacktop: u64) -> ! {
     assert!(ENTRY != 0, "ENTRY is not set");
-    asm!("mov rsp, {}; call {}", in(reg) stacktop, in(reg) ENTRY, in("rdi") bootinfo);
+    asm!("mov rsp, {}; call {}", in(reg) stacktop, in(reg) ENTRY, in("rdi") bootinfo as usize);
     unreachable!()
 }
 

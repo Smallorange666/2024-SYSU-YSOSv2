@@ -26,13 +26,13 @@ lazy_static! {
 pub fn init() {
     IDT.load();
 
-    // FIXME: check and init APIC
+    // check and init APIC
     if XApic::support() {
         let mut lapic = unsafe { XApic::new(physical_to_virtual(LAPIC_ADDR)) };
         lapic.cpu_init();
     }
 
-    // FIXME: enable serial irq with IO APIC (use enable_irq)
+    // enable serial irq with IO APIC (use enable_irq)
     enable_irq(Irq::Serial0 as u8, 0);
     info!("Interrupts Initialized.");
 }

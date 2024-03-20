@@ -112,6 +112,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         memory_map: mmap.entries().copied().collect(),
         physical_memory_offset: config.physical_memory_offset,
         system_table: runtime,
+        log_level: config.log_level,
     };
 
     // Align stack to 8 bytes

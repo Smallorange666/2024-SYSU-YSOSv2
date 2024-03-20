@@ -1,9 +1,17 @@
 use log::{Metadata, Record};
 
-pub fn init() {
+pub fn init(log_level: &str) {
     static LOGGER: Logger = Logger;
     log::set_logger(&LOGGER).unwrap();
-    log::set_max_level(log::LevelFilter::Trace);
+
+    match log_level {
+        "Error" => log::set_max_level(log::LevelFilter::Error),
+        "Warn" => log::set_max_level(log::LevelFilter::Warn),
+        "Info" => log::set_max_level(log::LevelFilter::Info),
+        "Debug" => log::set_max_level(log::LevelFilter::Debug),
+        "Trace" => log::set_max_level(log::LevelFilter::Trace),
+        _ => log::set_max_level(log::LevelFilter::Info),
+    }
     info!("Logger Initialized.");
 }
 

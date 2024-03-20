@@ -75,7 +75,6 @@ pub fn map_range(
             .unwrap()
             .start_address()
     );
-
     Ok(Page::range(range_start, range_end))
 }
 

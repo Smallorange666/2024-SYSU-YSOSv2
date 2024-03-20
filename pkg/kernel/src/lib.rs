@@ -28,19 +28,21 @@ pub use drivers::*;
 
 pub mod interrupt;
 pub mod memory;
+pub mod proc;
+pub use proc::*;
 
 pub use alloc::format;
 use boot::BootInfo;
 
 pub fn init(boot_info: &'static BootInfo) {
     serial::init(); // init serial output
-    logger::init(); // init logger system
+    logger::init(boot_info.log_level); // init logger system
     memory::address::init(boot_info);
     memory::gdt::init(); // init gdt
     memory::allocator::init(); // init kernel heap allocator
+    proc::init();
     interrupt::init(); // init interrupts
     memory::init(boot_info); // init memory manager
-    input::init();
     x86_64::instructions::interrupts::enable();
     info!("Interrupts Enabled.");
 
