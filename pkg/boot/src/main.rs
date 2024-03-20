@@ -107,16 +107,17 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
     let (runtime, mmap) = system_table.exit_boot_services(MemoryType::LOADER_DATA);
     // NOTE: alloc & log are no longer available
 
-    // construct BootInfo
+    // Construct BootInfo
     let bootinfo = BootInfo {
         memory_map: mmap.entries().copied().collect(),
         physical_memory_offset: config.physical_memory_offset,
         system_table: runtime,
     };
 
-    // align stack to 8 bytes
+    // Align stack to 8 bytes
     let stacktop = config.kernel_stack_address + config.kernel_stack_size * 0x1000 - 8;
 
+    // Jump to the entry point
     unsafe {
         jump_to_entry(&bootinfo, stacktop);
     }

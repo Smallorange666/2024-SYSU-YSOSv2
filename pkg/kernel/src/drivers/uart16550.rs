@@ -1,6 +1,7 @@
 use core::fmt;
 use x86_64::instructions::port::Port;
 
+pub const PORT: u16 = 0x3F8;
 /// A port-mapped UART 16550 serial interface.
 pub struct SerialPort {
     data: Port<u8>,
