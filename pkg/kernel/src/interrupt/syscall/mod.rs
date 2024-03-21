@@ -83,6 +83,9 @@ pub fn dispatcher(context: &mut ProcessContext) {
         Syscall::Allocate => context.set_rax(sys_allocate(&args)),
         // ptr: arg0 as *mut u8
         Syscall::Deallocate => sys_deallocate(&args),
+        // None
+        // print process info
+        Syscall::PrintInfo => context.set_rax(sys_print_info(&args) as usize),
         // Unknown
         Syscall::Unknown => warn!("Unhandled syscall: {:x?}", context.regs.rax),
     }

@@ -18,18 +18,20 @@ fn main() -> isize {
                 println!("\"ls\" to list all the apps");
                 println!("\"app_name\" to run the app");
                 println!("\"ps\" to list all the processes");
+                println!("\"info\" to print current process info");
                 println!("\"exit\" to exit the shell");
             }
             "ls" => {
-                lib::sys_list_app();
+                sys_list_app();
             }
             "ps" => {
-                lib::sys_stat();
+                sys_stat();
             }
             "exit" => {
                 println!("Goodbye!");
                 break;
             }
+            "info" => sys_print_info(sys_get_pid()),
             _ => {
                 let pid = sys_spawn(op.as_str());
                 if pid == 0 {

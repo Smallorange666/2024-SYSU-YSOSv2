@@ -7,6 +7,7 @@ use alloc::sync::Arc;
 use alloc::sync::Weak;
 use alloc::vec::Vec;
 use elf::map_range;
+use elf::unmap_range;
 use spin::*;
 use x86_64::structures::paging::mapper::MapToError;
 use x86_64::structures::paging::page::PageRange;
@@ -229,7 +230,12 @@ impl ProcessInner {
         self.status = ProgramStatus::Dead;
 
         // take and drop unused resources
-        self.proc_data.take();
+        // recycle process stack
+        let stack = self.proc_data.as_ref().unwrap().stack_segment.unwrap();
+        let frame_allocator = &mut *get_frame_alloc_for_sure();
+        let mut page_table = self.page_table.as_ref().unwrap().mapper();
+        unmap_range(stack.start, stack.end, &mut page_table, frame_allocator);
+
         self.page_table.take();
     }
 
@@ -249,6 +255,18 @@ impl ProcessInner {
             user_access,
             &mut self.proc_data.as_mut().unwrap().code_segment_pages,
         )
+    }
+
+    pub fn print_info(&self) {
+        println!("Process: {}", self.name);
+        println!("Ticks: {}", self.ticks_passed);
+        let (size, unit) = crate::memory::humanized_size(
+            self.proc_data.as_ref().unwrap().code_segment_pages * PAGE_SIZE,
+        );
+        println!("Code Segment Memory Usage: {:>7.*} {}", 3, size, unit);
+        let stack = self.proc_data.as_ref().unwrap().stack_segment.unwrap();
+        let (size, unit) = crate::memory::humanized_size((stack.end - stack.start) * PAGE_SIZE);
+        println!("Prcoess Memory Usage: {:>7.*} {}", 3, size, unit);
     }
 }
 

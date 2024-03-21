@@ -90,3 +90,12 @@ pub fn sys_deallocate(args: &SyscallArgs) {
             .deallocate(core::ptr::NonNull::new_unchecked(ptr), *layout);
     }
 }
+
+pub fn sys_print_info(args: &SyscallArgs) -> isize {
+    let pid = ProcessId(args.arg0 as u16);
+    if still_alive(pid) && get_process_manager().print_process_info(&pid) {
+        0
+    } else {
+        return -1;
+    }
+}

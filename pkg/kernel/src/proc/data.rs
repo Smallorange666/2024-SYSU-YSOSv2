@@ -21,7 +21,7 @@ pub struct ProcessData {
     pub(super) resources: Arc<RwLock<ResourceSet>>,
 
     // the number of page that code segment is mapped
-    pub(super) code_segment_pages: usize,
+    pub(super) code_segment_pages: u64,
 }
 
 impl Default for ProcessData {

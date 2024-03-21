@@ -11,11 +11,12 @@ pub enum Syscall {
     Write = 1,
 
     GetPid = 39,
-    
+
     Spawn = 59,
     Exit = 60,
     WaitPid = 61,
 
+    PrintInfo = 65530,
     ListApp = 65531,
     Stat = 65532,
     Allocate = 65533,

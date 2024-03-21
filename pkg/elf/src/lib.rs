@@ -81,6 +81,26 @@ pub fn map_range(
     Ok(Page::range(range_start, range_end))
 }
 
+pub fn unmap_range(
+    range_start: Page,
+    range_end: Page,
+    page_table: &mut impl Mapper<Size4KiB>,
+    frame_allocator: &mut impl FrameDeallocator<Size4KiB>,
+) {
+    trace!(
+        "Unmap Page Range: {:?}({})",
+        Page::range(range_start, range_end),
+        range_end - range_start
+    );
+
+    for page in Page::range(range_start, range_end) {
+        let frame = page_table.translate_page(page).unwrap();
+        unsafe {
+            frame_allocator.deallocate_frame(frame);
+        }
+    }
+}
+
 /// Load & Map ELF file
 ///
 /// load segments in ELF file to new frames and set page table
@@ -90,7 +110,7 @@ pub fn load_elf(
     page_table: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
     user_access: bool,
-    code_segment_pages: &mut usize,
+    code_segment_pages: &mut u64,
 ) -> Result<(), MapToError<Size4KiB>> {
     let file_buf = elf.input.as_ptr();
 
@@ -125,7 +145,7 @@ fn load_segment(
     page_table: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
     user_access: bool,
-    code_segment_pages: &mut usize,
+    code_segment_pages: &mut u64,
 ) -> Result<(), MapToError<Size4KiB>> {
     trace!("Loading & mapping segment: {:#x?}", segment);
 
@@ -155,7 +175,7 @@ fn load_segment(
     let pages = Page::range_inclusive(start_page, end_page);
 
     if segment.flags().is_execute() {
-        *code_segment_pages += pages.count() as usize;
+        *code_segment_pages += end_page - start_page;
     }
 
     let data = unsafe { file_buf.add(file_offset as usize) };
@@ -208,7 +228,7 @@ fn load_segment(
         let start_page: Page = Page::containing_address(start_address);
         let end_page = Page::containing_address(zero_end);
         if segment.flags().is_execute() {
-            *code_segment_pages += pages.count() as usize;
+            *code_segment_pages += end_page - start_page;
         }
         for page in Page::range_inclusive(start_page, end_page) {
             let frame = frame_allocator

@@ -234,6 +234,16 @@ impl ProcessManager {
         print!("{}", output);
     }
 
+    pub fn print_process_info(&self, pid: &ProcessId) -> bool {
+        if let Some(proc) = self.get_proc(&pid) {
+            proc.read().print_info();
+            true
+        } else {
+            warn!("Process #{} not found.", pid);
+            false
+        }
+    }
+
     pub fn is_proc_alive(&self, pid: &ProcessId) -> bool {
         if let Some(proc) = self.get_proc(&pid) {
             proc.read().status() != ProgramStatus::Dead
