@@ -21,7 +21,7 @@ lazy_static! {
             const STACK_SIZE: usize = IST_SIZES[0];
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
             let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_ptr() });
-            let stack_end = stack_start + STACK_SIZE;
+            let stack_end = stack_start + STACK_SIZE as u64;
             info!(
                 "Privilege Stack  : 0x{:016x}-0x{:016x}",
                 stack_start.as_u64(),
@@ -35,7 +35,7 @@ lazy_static! {
             const STACK_SIZE: usize = IST_SIZES[1];
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
             let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_ptr() });
-            let stack_end = stack_start + STACK_SIZE;
+            let stack_end = stack_start + STACK_SIZE as u64;
             info!(
                 "Double Fault IST : 0x{:016x}-0x{:016x}",
                 stack_start.as_u64(),
@@ -48,7 +48,7 @@ lazy_static! {
             const STACK_SIZE: usize = IST_SIZES[2];
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
             let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_ptr() });
-            let stack_end = stack_start + STACK_SIZE;
+            let stack_end = stack_start + STACK_SIZE as u64;
             info!(
                 "Page Fault IST   : 0x{:016x}-0x{:016x}",
                 stack_start.as_u64(),
@@ -61,7 +61,7 @@ lazy_static! {
             const STACK_SIZE: usize = IST_SIZES[3];
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
             let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_ptr() });
-            let stack_end = stack_start + STACK_SIZE;
+            let stack_end = stack_start + STACK_SIZE as u64;
             info!(
                 "Timer IST        : 0x{:016x}-0x{:016x}",
                 stack_start.as_u64(),
@@ -74,7 +74,7 @@ lazy_static! {
             const STACK_SIZE: usize = IST_SIZES[4];
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
             let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_ptr() });
-            let stack_end = stack_start + STACK_SIZE;
+            let stack_end = stack_start + STACK_SIZE as u64;
             info!(
                 "Syscall IST      : 0x{:016x}-0x{:016x}",
                 stack_start.as_u64(),
@@ -90,11 +90,11 @@ lazy_static! {
 lazy_static! {
     static ref GDT: (GlobalDescriptorTable, KernelSelectors, UserSelectors) = {
         let mut gdt = GlobalDescriptorTable::new();
-        let code_selector = gdt.add_entry(Descriptor::kernel_code_segment());
-        let data_selector = gdt.add_entry(Descriptor::kernel_data_segment());
-        let tss_selector = gdt.add_entry(Descriptor::tss_segment(&TSS));
-        let user_code_selector = gdt.add_entry(Descriptor::user_code_segment());
-        let user_data_selector = gdt.add_entry(Descriptor::user_data_segment());
+        let code_selector = gdt.append(Descriptor::kernel_code_segment());
+        let data_selector = gdt.append(Descriptor::kernel_data_segment());
+        let tss_selector = gdt.append(Descriptor::tss_segment(&TSS));
+        let user_code_selector = gdt.append(Descriptor::user_code_segment());
+        let user_data_selector = gdt.append(Descriptor::user_data_segment());
         (
             gdt,
             KernelSelectors {

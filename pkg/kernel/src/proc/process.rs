@@ -247,6 +247,7 @@ impl ProcessInner {
             &mut page_table,
             frame_allocator,
             user_access,
+            &mut self.proc_data.as_mut().unwrap().code_segment_pages,
         )
     }
 }

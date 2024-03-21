@@ -90,6 +90,7 @@ pub fn load_elf(
     page_table: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
     user_access: bool,
+    code_segment_pages: &mut usize,
 ) -> Result<(), MapToError<Size4KiB>> {
     let file_buf = elf.input.as_ptr();
 
@@ -107,6 +108,7 @@ pub fn load_elf(
             page_table,
             frame_allocator,
             user_access,
+            code_segment_pages,
         )?
     }
 
@@ -123,6 +125,7 @@ fn load_segment(
     page_table: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
     user_access: bool,
+    code_segment_pages: &mut usize,
 ) -> Result<(), MapToError<Size4KiB>> {
     trace!("Loading & mapping segment: {:#x?}", segment);
 
@@ -150,6 +153,10 @@ fn load_segment(
     let start_page = Page::containing_address(virt_start_addr);
     let end_page = Page::containing_address(virt_start_addr + file_size - 1u64);
     let pages = Page::range_inclusive(start_page, end_page);
+
+    if segment.flags().is_execute() {
+        *code_segment_pages += pages.count() as usize;
+    }
 
     let data = unsafe { file_buf.add(file_offset as usize) };
 
@@ -200,7 +207,9 @@ fn load_segment(
         let start_address = VirtAddr::new(align_up(zero_start.as_u64(), Size4KiB::SIZE));
         let start_page: Page = Page::containing_address(start_address);
         let end_page = Page::containing_address(zero_end);
-
+        if segment.flags().is_execute() {
+            *code_segment_pages += pages.count() as usize;
+        }
         for page in Page::range_inclusive(start_page, end_page) {
             let frame = frame_allocator
                 .allocate_frame()

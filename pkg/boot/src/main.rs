@@ -92,6 +92,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         &mut page_table,
         &mut frame_allocator,
         false,
+        &mut 0,
     )
     .expect("");
 

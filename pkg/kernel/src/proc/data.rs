@@ -19,6 +19,9 @@ pub struct ProcessData {
 
     // file descriptors table
     pub(super) resources: Arc<RwLock<ResourceSet>>,
+
+    // the number of page that code segment is mapped
+    pub(super) code_segment_pages: usize,
 }
 
 impl Default for ProcessData {
@@ -27,6 +30,7 @@ impl Default for ProcessData {
             env: Arc::new(RwLock::new(BTreeMap::new())),
             stack_segment: None,
             resources: Arc::new(RwLock::new(ResourceSet::default())),
+            code_segment_pages: 0,
         }
     }
 }

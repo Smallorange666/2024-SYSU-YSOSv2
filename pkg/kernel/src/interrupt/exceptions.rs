@@ -1,6 +1,7 @@
 use crate::memory::*;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+use x86_64::VirtAddr;
 
 pub unsafe fn register_idt(idt: &mut InterruptDescriptorTable) {
     // see: https://wiki.osdev.org/Exceptions
@@ -154,12 +155,11 @@ pub extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     err_code: PageFaultErrorCode,
 ) {
-    if !crate::proc::handle_page_fault(Cr2::read(), err_code) {
+    let cr2 = Cr2::read().unwrap_or(VirtAddr::new(0));
+    if !crate::proc::handle_page_fault(cr2, err_code) {
         warn!(
             "EXCEPTION: PAGE FAULT, ERROR_CODE: {:?}\n\nTrying to access: {:#x}\n{:#?}",
-            err_code,
-            Cr2::read(),
-            stack_frame
+            err_code, cr2, stack_frame
         );
         // print info about which process causes page fault?
         let pid = crate::proc::cal_pid_from_stackframe(&stack_frame);
