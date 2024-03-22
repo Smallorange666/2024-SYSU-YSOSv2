@@ -37,7 +37,8 @@ use boot::BootInfo;
 
 pub fn init(boot_info: &'static BootInfo) {
     serial::init(); // init serial output
-    logger::init(boot_info.log_level); // init logger system
+    logger::init(boot_info.log_level); // init logger syste
+    runtime::init(boot_info); // init runtime system
     memory::address::init(boot_info);
     memory::gdt::init(); // init gdt
     memory::allocator::init(); // init kernel heap allocator

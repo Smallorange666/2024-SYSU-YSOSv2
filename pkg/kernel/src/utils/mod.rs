@@ -6,6 +6,7 @@ mod regs;
 pub mod func;
 pub mod logger;
 pub mod resource;
+pub mod runtime;
 
 use crate::proc::*;
 pub use macros::*;

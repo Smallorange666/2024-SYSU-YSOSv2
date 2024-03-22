@@ -84,3 +84,8 @@ pub fn sys_exit(code: isize) -> ! {
 pub fn sys_print_info(pid: u16) -> u16 {
     syscall!(Syscall::PrintInfo, pid as u64) as u16
 }
+
+#[inline(always)]
+pub fn sys_time() -> u64 {
+    syscall!(Syscall::Time) as u64
+}

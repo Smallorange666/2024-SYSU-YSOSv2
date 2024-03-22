@@ -31,7 +31,10 @@ fn main() -> isize {
                 println!("Goodbye!");
                 break;
             }
-            "info" => sys_print_info(sys_get_pid()),
+            "info" => {
+                sys_print_info(sys_get_pid());
+            }
+            // "sleep" => sleep(10),
             _ => {
                 let pid = sys_spawn(op.as_str());
                 if pid == 0 {

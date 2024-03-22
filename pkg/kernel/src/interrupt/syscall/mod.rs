@@ -86,6 +86,8 @@ pub fn dispatcher(context: &mut ProcessContext) {
         // None
         // print process info
         Syscall::PrintInfo => context.set_rax(sys_print_info(&args) as usize),
+        // get current time
+        Syscall::Time => context.set_rax(sys_time() as usize),
         // Unknown
         Syscall::Unknown => warn!("Unhandled syscall: {:x?}", context.regs.rax),
     }

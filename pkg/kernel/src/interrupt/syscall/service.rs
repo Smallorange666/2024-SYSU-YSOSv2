@@ -3,6 +3,7 @@ use core::alloc::Layout;
 use super::SyscallArgs;
 use crate::proc;
 use crate::proc::*;
+use crate::runtime::get_uefi_runtime_for_sure;
 
 pub fn spawn_process(args: &SyscallArgs) -> usize {
     // get app name by args
@@ -98,4 +99,10 @@ pub fn sys_print_info(args: &SyscallArgs) -> isize {
     } else {
         return -1;
     }
+}
+
+pub fn sys_time() -> u64 {
+    let uefi_runtime = get_uefi_runtime_for_sure();
+    let time = uefi_runtime.get_time();
+    time.hour() as u64 * 3600 + time.minute() as u64 * 60 + time.second() as u64
 }

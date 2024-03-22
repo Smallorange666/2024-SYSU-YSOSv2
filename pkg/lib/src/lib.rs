@@ -16,7 +16,7 @@ pub extern crate alloc;
 
 mod syscall;
 
-use core::fmt::*;
+use core::{fmt::*, time::Duration};
 
 pub use alloc::*;
 pub use io::*;
@@ -52,4 +52,13 @@ pub fn _print(args: Arguments) {
 #[doc(hidden)]
 pub fn _err(args: Arguments) {
     stderr().write(format!("{}", args).as_str());
+}
+
+pub fn sleep(secs: u64) {
+    let start = Duration::from_secs(sys_time());
+    let dur = Duration::from_secs(secs);
+    let mut current = start;
+    while current - start < dur {
+        current = Duration::from_secs(sys_time());
+    }
 }
