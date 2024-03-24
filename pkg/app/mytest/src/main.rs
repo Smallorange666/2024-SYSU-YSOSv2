@@ -1,42 +1,56 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
 extern crate lib;
+
 use lib::*;
 
-const MOD: u64 = 1000000007;
-
-fn factorial(n: u64) -> u64 {
-    if n == 0 {
-        1
-    } else {
-        n * factorial(n - 1) % MOD
-    }
-}
+static mut M: u64 = 0xdeadbeef;
 
 fn main() -> isize {
-    print!("Input n: ");
+    let mut c = 32;
 
-    let input = lib::stdin().read_line();
+    let pid = sys_fork();
+    
+    if pid == 0 {
+        println!("I am the child process");
 
-    // prase input as u64
-    let n = input.parse::<u64>().unwrap();
+        assert_eq!(c, 32);
 
-    if n > 1000000 {
-        println!("n must be less than 1000000");
-        return 1;
+        unsafe {
+            println!("child read value of M: {:#x}", M);
+            M = 0x2333;
+            println!("child changed the value of M: {:#x}", M);
+        }
+
+        c += 32;
+    } else {
+        println!("I am the parent process");
+
+        sys_stat();
+
+        assert_eq!(c, 32);
+
+        println!("Waiting for child to exit...");
+
+        let ret = sys_wait_pid(pid);
+
+        println!("Child exited with status {}", ret);
+
+        assert_eq!(ret, 64);
+
+        unsafe {
+            println!("parent read value of M: {:#x}", M);
+            assert_eq!(M, 0x2333);
+        }
+
+        c += 1024;
+
+        assert_eq!(c, 1056);
     }
 
-    // calculate factorial
-    let result = factorial(n);
-
-    // print system status
-    sys_stat();
-
-    // print result
-    println!("The factorial of {} under modulo {} is {}.", n, MOD, result);
-
-    0
+    c
 }
 
 entry!(main);

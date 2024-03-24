@@ -70,6 +70,17 @@ impl PageTableContext {
             )
         }
     }
+
+    pub fn using_count(&self) -> usize {
+        Arc::strong_count(&self.reg)
+    }
+
+    pub fn fork(&self) -> Self {
+        // forked process shares the page table
+        Self {
+            reg: self.reg.clone(),
+        }
+    }
 }
 
 impl core::fmt::Debug for PageTableContext {
@@ -77,6 +88,7 @@ impl core::fmt::Debug for PageTableContext {
         f.debug_struct("PageTable")
             .field("addr", &self.reg.addr)
             .field("flags", &self.reg.flags)
+            .field("refs", &self.using_count())
             .finish()
     }
 }

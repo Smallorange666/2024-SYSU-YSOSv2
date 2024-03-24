@@ -385,6 +385,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ysos_counter"
+version = "0.1.0"
+dependencies = [
+ "yslib",
+]
+
+[[package]]
 name = "ysos_elf"
 version = "0.1.0"
 dependencies = [

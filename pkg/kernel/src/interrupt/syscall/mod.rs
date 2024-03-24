@@ -74,11 +74,6 @@ pub fn dispatcher(context: &mut ProcessContext) {
         Syscall::Stat => list_process(),
         // None
         Syscall::ListApp => proc::list_app(),
-
-        // ----------------------------------------------------
-        // NOTE: following syscall examples are implemented
-        // ----------------------------------------------------
-
         // layout: arg0 as *const Layout -> ptr: *mut u8
         Syscall::Allocate => context.set_rax(sys_allocate(&args)),
         // ptr: arg0 as *mut u8
@@ -88,6 +83,8 @@ pub fn dispatcher(context: &mut ProcessContext) {
         Syscall::PrintInfo => context.set_rax(sys_print_info(&args) as usize),
         // get current time
         Syscall::Time => context.set_rax(sys_time() as usize),
+        // None -> pid: u16 or 0 or -1
+        Syscall::Fork => fork(context),
         // Unknown
         Syscall::Unknown => warn!("Unhandled syscall: {:x?}", context.regs.rax),
     }

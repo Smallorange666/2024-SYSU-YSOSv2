@@ -53,7 +53,9 @@ pub fn list_process() {
 pub fn wait_pid(args: &SyscallArgs) -> isize {
     let pid = ProcessId(args.arg0 as u16);
     if !still_alive(pid) {
-        get_process_manager().get_exit_code(&pid).unwrap()
+        let exit_code = get_process_manager().get_exit_code(&pid).unwrap();
+        println!("Process {} exited with code {}", pid, exit_code);
+        return exit_code;
     } else {
         return -1;
     }
@@ -105,4 +107,17 @@ pub fn sys_time() -> u64 {
     let uefi_runtime = get_uefi_runtime_for_sure();
     let time = uefi_runtime.get_time();
     time.hour() as u64 * 3600 + time.minute() as u64 * 60 + time.second() as u64
+}
+
+pub fn fork(context: &mut ProcessContext) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        // FIXME: save_current as parent
+        manager.save_current(context);
+        // FIXME: fork to get child
+        manager.fork();
+        // FIXME: push to child & parent to ready queue
+        // FIXME: switch to next process
+        manager.switch_next(context);
+    })
 }

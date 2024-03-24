@@ -73,6 +73,10 @@ impl ProcessContext {
     pub fn update_stack_frame(&mut self, stack_top: VirtAddr) {
         self.value.stack_frame.stack_pointer = stack_top;
     }
+
+    pub fn stack_top(&self) -> u64 {
+        self.value.stack_frame.stack_pointer.as_u64()
+    }
 }
 
 impl Default for ProcessContextValue {

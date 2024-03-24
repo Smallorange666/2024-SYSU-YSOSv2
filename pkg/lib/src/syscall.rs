@@ -89,3 +89,8 @@ pub fn sys_print_info(pid: u16) -> u16 {
 pub fn sys_time() -> u64 {
     syscall!(Syscall::Time) as u64
 }
+
+#[inline(always)]
+pub fn sys_fork() -> u16 {
+    syscall!(Syscall::Fork) as u16
+}

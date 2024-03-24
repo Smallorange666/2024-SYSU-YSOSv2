@@ -1,3 +1,5 @@
+use core::ptr::copy_nonoverlapping;
+
 use super::ProcessId;
 use super::*;
 use crate::memory::*;
@@ -95,28 +97,7 @@ impl Process {
 
     pub fn alloc_init_stack(&self) -> VirtAddr {
         // alloc init stack base on self pid
-        let stack_bottom = STACK_MAX - (self.pid.0 - 1) as u64 * STACK_MAX_SIZE - STACK_DEF_SIZE;
-        let mut page_table = self.read().page_table.as_ref().unwrap().mapper();
-        let frame_allocator = &mut *get_frame_alloc_for_sure();
-        trace!("stack_bottom: {:x}", stack_bottom);
-        map_range(
-            stack_bottom,
-            STACK_DEF_PAGE,
-            &mut page_table,
-            frame_allocator,
-            true,
-        )
-        .expect("");
-
-        let stack_top = VirtAddr::new(stack_bottom + STACK_DEF_SIZE - 8);
-
-        self.write()
-            .proc_data
-            .as_mut()
-            .unwrap()
-            .set_stack(VirtAddr::new(stack_bottom), STACK_DEF_PAGE);
-
-        stack_top
+        self.write().alloc_init_stack(self.pid.0)
     }
 
     pub fn page_range(&self) -> PageRange {
@@ -155,6 +136,35 @@ impl Process {
             .as_mut()
             .unwrap()
             .set_stack(VirtAddr::new(stack_bottom), now_page_num + new_page_num);
+    }
+
+    pub fn fork(self: &Arc<Self>) -> Arc<Self> {
+        // FIXME: lock inner as write
+        let mut inner = self.write();
+        // FIXME: inner fork with parent weak ref
+        let child_pid = ProcessId::new();
+        let child_inner = inner.fork(Arc::downgrade(self));
+        // FOR DBG: maybe print the child process info
+        //          e.g. parent, name, pid, etc.
+        trace!(
+            "Parent {} forked: {}#{}",
+            inner.name,
+            cal_pid_from_stackframe(child_inner.context.stack_frame()),
+            child_inner.name
+        );
+        // FIXME: make the arc of child
+        let child_proc = Arc::new(Self {
+            pid: child_pid,
+            inner: Arc::new(RwLock::new(child_inner)),
+        });
+        // FIXME: add child to current process's children list
+        inner.children.push(child_proc.clone());
+        // FIXME: set fork ret value for parent with `context.set_rax`
+        inner.context.set_rax(child_pid.0 as usize);
+        // FIXME: mark the child as ready & return it
+        child_proc.write().pause();
+
+        child_proc
     }
 }
 
@@ -239,6 +249,30 @@ impl ProcessInner {
         self.page_table.take();
     }
 
+    pub fn alloc_init_stack(&mut self, pid: u16) -> VirtAddr {
+        let stack_bottom = STACK_MAX - (pid - 1) as u64 * STACK_MAX_SIZE - STACK_DEF_SIZE;
+        let mut page_table = self.page_table.as_ref().unwrap().mapper();
+        let frame_allocator = &mut *get_frame_alloc_for_sure();
+        trace!("stack_bottom: {:x}", stack_bottom);
+        map_range(
+            stack_bottom,
+            STACK_DEF_PAGE,
+            &mut page_table,
+            frame_allocator,
+            true,
+        )
+        .expect("");
+
+        let stack_top = VirtAddr::new(stack_bottom + STACK_DEF_SIZE - 8);
+
+        self.proc_data
+            .as_mut()
+            .unwrap()
+            .set_stack(VirtAddr::new(stack_bottom), STACK_DEF_PAGE);
+
+        stack_top
+    }
+
     pub fn load_elf(
         &mut self,
         elf: &ElfFile,
@@ -267,6 +301,86 @@ impl ProcessInner {
         let stack = self.proc_data.as_ref().unwrap().stack_segment.unwrap();
         let (size, unit) = crate::memory::humanized_size((stack.end - stack.start) * PAGE_SIZE);
         println!("Prcoess Memory Usage: {:>7.*} {}", 3, size, unit);
+    }
+
+    /// Clone a range of memory
+    ///
+    /// - `src_addr`: the address of the source memory
+    /// - `dest_addr`: the address of the target memory
+    /// - `size`: the count of pages to be cloned
+    fn clone_range(src_addr: u64, dest_addr: u64, size: usize) {
+        trace!("Clone range: {:#x} -> {:#x}", src_addr, dest_addr);
+        unsafe {
+            copy_nonoverlapping::<u8>(
+                src_addr as *mut u8,
+                dest_addr as *mut u8,
+                size * Size4KiB::SIZE as usize,
+            );
+        }
+    }
+    pub fn fork(&mut self, parent: Weak<Process>) -> ProcessInner {
+        let parent = parent.upgrade().unwrap();
+        // FIXME: get current process's stack info
+        let parent_stack = self.stack_segment.unwrap();
+
+        // FIXME: clone the process data struct
+        let mut child_proc_data = self.proc_data.as_ref().unwrap().clone();
+        // FIXME: clone the page table context (see instructions)
+        let child_page_table = self.page_table.as_ref().unwrap().fork();
+        // FIXME: alloc & map new stack for child (see instructions)
+        // FIXME: copy the *entire stack* from parent to child
+        let count = parent.pid().0 + self.children.len() as u16;
+        let mut child_stack_bottom =
+            STACK_MAX - (count - 1) as u64 * STACK_MAX_SIZE - STACK_DEF_SIZE;
+        let child_stack_count = parent_stack.end - parent_stack.start;
+        let frame_allocator = &mut *get_frame_alloc_for_sure();
+        trace!("Original child_stack_bottom: {:x}", child_stack_bottom);
+        while map_range(
+            child_stack_bottom,
+            child_stack_count,
+            &mut child_page_table.mapper(),
+            frame_allocator,
+            true,
+        )
+        .is_err()
+        {
+            trace!("Map child stack to {:#x} failed.", child_stack_bottom);
+            child_stack_bottom -= STACK_MAX_SIZE; // stack grow down
+        }
+
+        Self::clone_range(
+            parent_stack.start.start_address().as_u64(),
+            child_stack_bottom,
+            child_stack_count as usize,
+        );
+
+        // FIXME: update child's context with new *stack pointer*
+        //          > update child's stack to new base
+        //          > keep lower bits of *rsp*, update the higher bits
+        //          > also update the stack record in process data
+        child_proc_data.set_stack(VirtAddr::new(child_stack_bottom), child_stack_count);
+        let mut child_context = self.context.clone();
+        let child_stack_top =
+            (self.context.stack_top() & 0xFFFFFFFF) | child_stack_bottom & !(0xFFFFFFFF);
+        trace!("parent_stack_top: {:x?}", self.context.stack_top());
+        trace!("child_stack_top: {:x?}", child_stack_top);
+        child_context.update_stack_frame(VirtAddr::new(child_stack_top));
+        // FIXME: set the return value 0 for child with `context.set_rax`
+        child_context.set_rax(0);
+        // FIXME: construct the child process inner
+        let child_inner = ProcessInner {
+            name: self.name.clone(),
+            parent: Some(Arc::downgrade(&parent)),
+            children: Vec::new(),
+            ticks_passed: 0,
+            status: ProgramStatus::Ready,
+            exit_code: None,
+            context: child_context,
+            page_table: Some(child_page_table),
+            proc_data: Some(child_proc_data),
+        };
+        // NOTE: return inner because there's no pid record in inner
+        child_inner
     }
 }
 

@@ -142,7 +142,6 @@ impl ProcessManager {
             nextpid = self.ready_queue.lock().pop_front().unwrap();
             nextproc = self.get_proc(&nextpid).unwrap();
         }
-
         // restore next process's context
         nextproc.write().restore(context);
         // update processor's current pid
@@ -150,30 +149,6 @@ impl ProcessManager {
 
         nextpid
     }
-
-    // pub fn spawn_kernel_thread(
-    //     &self,
-    //     entry: VirtAddr,
-    //     name: String,
-    //     proc_data: Option<ProcessData>,
-    // ) -> ProcessId {
-    //     let kproc = self.get_proc(&KERNEL_PID).unwrap();
-    //     let page_table = kproc.read().clone_page_table();
-    //     let proc = Process::new(name, Some(Arc::downgrade(&kproc)), page_table, proc_data);
-
-    //     // alloc stack for the new process base on pid
-    //     let stack_top = proc.alloc_init_stack();
-    //     trace!("Spawned new process: {:#?}", &proc);
-    //     // set the stack frame
-    //     proc.write().context().init_stack_frame(entry, stack_top);
-    //     // add to process map
-    //     let manager = get_process_manager();
-    //     manager.add_proc(proc.pid(), proc.clone());
-    //     // push to ready queue
-    //     manager.push_ready(proc.pid());
-
-    //     proc.pid()
-    // }
 
     pub fn kill_current(&self, ret: isize) {
         self.kill(processor::get_pid(), ret);
@@ -252,12 +227,23 @@ impl ProcessManager {
         }
     }
 
+    pub fn fork(&self) {
+        // FIXME: get current process
+        let proc = self.current();
+        // FIXME: fork to get child
+        let child = proc.fork();
+        // FIXME: add child to process list
+        self.add_proc(child.pid(), child.clone());
+        self.push_ready(child.pid());
+        // FOR DBG: maybe print the process ready queue?
+        print_process_list();
+    }
+
     pub fn read(&self, fd: u8, buf: &mut [u8]) -> isize {
         self.current().read().read(fd, buf)
     }
 
     pub fn write(&self, fd: u8, buf: &[u8]) -> isize {
-        trace!("Write to fd: {} with buf: {:?}", fd, buf);
         self.current().write().write(fd, buf)
     }
 }
