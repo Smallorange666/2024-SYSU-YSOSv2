@@ -44,6 +44,13 @@ impl Semaphore {
         // FIXME: if the count is 0, then push pid into the wait queue
         //          return Block(pid)
         // FIXME: else decrease the count and return Ok
+        if self.count == 0 {
+            self.wait_queue.push_back(pid);
+            return SemaphoreResult::Block(pid);
+        } else {
+            self.count -= 1;
+            return SemaphoreResult::Ok;
+        }
     }
 
     /// Signal the semaphore (release/up/verhogen)
@@ -55,6 +62,13 @@ impl Semaphore {
         //          pop a process from the wait queue
         //          return WakeUp(pid)
         // FIXME: else increase the count and return Ok
+
+        if let Some(pid) = self.wait_queue.pop_front() {
+            return SemaphoreResult::WakeUp(pid);
+        } else {
+            self.count += 1;
+            return SemaphoreResult::Ok;
+        }
     }
 }
 
@@ -64,11 +78,21 @@ pub struct SemaphoreSet {
 }
 
 impl SemaphoreSet {
+    pub fn new() -> Self {
+        Self {
+            sems: BTreeMap::new(),
+        }
+    }
+
     pub fn insert(&mut self, key: u32, value: usize) -> bool {
         trace!("Sem Insert: <{:#x}>{}", key, value);
 
         // FIXME: insert a new semaphore into the sems
         //          use `insert(/* ... */).is_none()`
+        let sid = SemaphoreId::new(key);
+        self.sems
+            .insert(sid, Mutex::new(Semaphore::new(value)))
+            .is_none()
     }
 
     pub fn remove(&mut self, key: u32) -> bool {
@@ -76,15 +100,22 @@ impl SemaphoreSet {
 
         // FIXME: remove the semaphore from the sems
         //          use `remove(/* ... */).is_some()`
+        let sid = SemaphoreId::new(key);
+        self.sems.remove(&sid).is_some()
     }
 
     /// Wait the semaphore (acquire/down/proberen)
     pub fn wait(&self, key: u32, pid: ProcessId) -> SemaphoreResult {
         let sid = SemaphoreId::new(key);
-
         // FIXME: try get the semaphore from the sems
         //         then do it's operation
         // FIXME: return NotExist if the semaphore is not exist
+        if let Some(sem) = self.sems.get(&sid) {
+            let mut sem = sem.lock();
+            return sem.wait(pid);
+        } else {
+            return SemaphoreResult::NotExist;
+        }
     }
 
     /// Signal the semaphore (release/up/verhogen)
@@ -94,6 +125,12 @@ impl SemaphoreSet {
         // FIXME: try get the semaphore from the sems
         //         then do it's operation
         // FIXME: return NotExist if the semaphore is not exist
+        if let Some(sem) = self.sems.get(&sid) {
+            let mut sem = sem.lock();
+            return sem.signal();
+        } else {
+            return SemaphoreResult::NotExist;
+        }
     }
 }
 

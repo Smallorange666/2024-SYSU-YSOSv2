@@ -5,9 +5,7 @@ use x86_64::{
     VirtAddr,
 };
 
-use crate::{
-    memory::gdt::get_user_selector, RegistersValue, STACK_MAX, STACK_MAX_SIZE, STACK_START_MASK,
-};
+use crate::{memory::gdt::get_user_selector, RegistersValue};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -20,11 +18,6 @@ pub struct ProcessContextValue {
 #[derive(Clone, Copy, Default)]
 pub struct ProcessContext {
     value: ProcessContextValue,
-}
-
-pub fn cal_pid_from_stackframe(stack_frame: &InterruptStackFrameValue) -> u16 {
-    let rsp = stack_frame.clone().stack_pointer;
-    ((STACK_MAX - (rsp.as_u64() & STACK_START_MASK)) / STACK_MAX_SIZE) as u16
 }
 
 impl ProcessContext {

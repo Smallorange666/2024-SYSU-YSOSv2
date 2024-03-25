@@ -14,6 +14,7 @@ pub mod io;
 pub mod allocator;
 pub extern crate alloc;
 
+pub mod sync;
 mod syscall;
 
 use core::{fmt::*, time::Duration};

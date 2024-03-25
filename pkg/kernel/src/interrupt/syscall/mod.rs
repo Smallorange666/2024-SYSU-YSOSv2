@@ -47,7 +47,6 @@ pub fn dispatcher(context: &mut ProcessContext) {
         context.regs.rsi,
         context.regs.rdx,
     );
-
     match args.syscall {
         // fd: arg0 as u8, buf: &[u8] (ptr: arg1 as *const u8, len: arg2)
         // read from fd & return length
@@ -57,21 +56,19 @@ pub fn dispatcher(context: &mut ProcessContext) {
         Syscall::Write => context.set_rax(sys_write(&args)),
         // None -> pid: u16
         // get current pid
-        Syscall::GetPid => {
-            context.set_rax(cal_pid_from_stackframe(&context.stack_frame()) as usize)
-        }
+        Syscall::GetPid => context.set_rax(sys_get_pid() as usize),
         // path: &str (ptr: arg0 as *const u8, len: arg1) -> pid: u16
         // spawn process from name
-        Syscall::Spawn => context.set_rax(spawn_process(&args)),
+        Syscall::Spawn => context.set_rax(sys_spawn_process(&args)),
         // ret: arg0 as isize
         // exit process with retcode
-        Syscall::Exit => exit_process(&args, context),
+        Syscall::Exit => sys_exit_process(&args, context),
         // pid: arg0 as u16 -> status: isize
         // check if the process is running or get retcode
-        Syscall::WaitPid => context.set_rax(wait_pid(&args) as usize),
+        Syscall::WaitPid => context.set_rax(sys_wait_pid(&args) as usize),
 
         // None
-        Syscall::Stat => list_process(),
+        Syscall::Stat => sys_list_process(),
         // None
         Syscall::ListApp => proc::list_app(),
         // layout: arg0 as *const Layout -> ptr: *mut u8
@@ -84,7 +81,9 @@ pub fn dispatcher(context: &mut ProcessContext) {
         // get current time
         Syscall::Time => context.set_rax(sys_time() as usize),
         // None -> pid: u16 or 0 or -1
-        Syscall::Fork => fork(context),
+        Syscall::Fork => sys_fork(context),
+        // op: u8, key: u32, val: usize -> ret: any
+        Syscall::Sem => sys_sem(&args, context),
         // Unknown
         Syscall::Unknown => warn!("Unhandled syscall: {:x?}", context.regs.rax),
     }

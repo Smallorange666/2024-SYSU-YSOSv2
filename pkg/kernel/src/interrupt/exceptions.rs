@@ -162,7 +162,7 @@ pub extern "x86-interrupt" fn page_fault_handler(
             err_code, cr2, stack_frame
         );
         // print info about which process causes page fault?
-        let pid = crate::proc::cal_pid_from_stackframe(&stack_frame);
+        let pid = crate::proc::get_pid();
 
         panic!("Cannot handle process {} 's page fault! ", pid);
     }

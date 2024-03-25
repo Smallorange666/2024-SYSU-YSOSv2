@@ -5,7 +5,7 @@ use crate::proc;
 use crate::proc::*;
 use crate::runtime::get_uefi_runtime_for_sure;
 
-pub fn spawn_process(args: &SyscallArgs) -> usize {
+pub fn sys_spawn_process(args: &SyscallArgs) -> usize {
     // get app name by args
     // - core::str::from_utf8_unchecked
     // - core::slice::from_raw_parts
@@ -40,25 +40,19 @@ pub fn sys_read(args: &SyscallArgs) -> usize {
     result
 }
 
-pub fn exit_process(args: &SyscallArgs, context: &mut ProcessContext) {
+pub fn sys_exit_process(args: &SyscallArgs, context: &mut ProcessContext) {
     // exit process with retcode
     proc::exit(args.arg0 as isize, context);
 }
 
-pub fn list_process() {
+pub fn sys_list_process() {
     // list all processes
     proc::print_process_list();
 }
 
-pub fn wait_pid(args: &SyscallArgs) -> isize {
+pub fn sys_wait_pid(args: &SyscallArgs) -> isize {
     let pid = ProcessId(args.arg0 as u16);
-    if !still_alive(pid) {
-        let exit_code = get_process_manager().get_exit_code(&pid).unwrap();
-        println!("Process {} exited with code {}", pid, exit_code);
-        return exit_code;
-    } else {
-        return -1;
-    }
+    wait_pid(pid)
 }
 
 pub fn sys_allocate(args: &SyscallArgs) -> usize {
@@ -109,15 +103,21 @@ pub fn sys_time() -> u64 {
     time.hour() as u64 * 3600 + time.minute() as u64 * 60 + time.second() as u64
 }
 
-pub fn fork(context: &mut ProcessContext) {
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        let manager = get_process_manager();
-        // FIXME: save_current as parent
-        manager.save_current(context);
-        // FIXME: fork to get child
-        manager.fork();
-        // FIXME: push to child & parent to ready queue
-        // FIXME: switch to next process
-        manager.switch_next(context);
-    })
+pub fn sys_fork(context: &mut ProcessContext) {
+    info!("Process {} is forking", get_pid());
+    fork(context);
+}
+
+pub fn sys_sem(args: &SyscallArgs, context: &mut ProcessContext) {
+    match args.arg0 {
+        0 => context.set_rax(new_sem(args.arg1 as u32, args.arg2)),
+        1 => context.set_rax(remove_sem(args.arg1 as u32)),
+        2 => sem_signal(args.arg1 as u32, context),
+        3 => sem_wait(args.arg1 as u32, context),
+        _ => context.set_rax(usize::MAX),
+    }
+}
+
+pub fn sys_get_pid() -> u16 {
+    get_pid().0
 }

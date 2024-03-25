@@ -239,6 +239,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "test_sem"
+version = "0.1.0"
+dependencies = [
+ "yslib",
+]
+
+[[package]]
+name = "test_spin"
+version = "0.1.0"
+dependencies = [
+ "yslib",
+]
+
+[[package]]
 name = "ucs2"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -367,7 +381,9 @@ dependencies = [
 name = "yslib"
 version = "0.4.0"
 dependencies = [
+ "spin 0.9.8",
  "x86_64 0.14.11",
+ "ysos_kernel",
  "ysos_syscall",
 ]
 

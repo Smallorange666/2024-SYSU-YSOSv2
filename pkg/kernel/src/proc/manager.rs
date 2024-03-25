@@ -1,13 +1,12 @@
 use crate::memory::{get_frame_alloc_for_sure, PHYSICAL_OFFSET};
 
-use self::processor::get_pid;
-
 use super::*;
 
 use alloc::collections::BTreeMap;
 use alloc::sync::Weak;
 use alloc::{collections::VecDeque, format, sync::Arc};
-use spin::{Mutex, RwLock};
+use spin::mutex::Mutex;
+use spin::RwLock;
 
 use x86_64::VirtAddr;
 
@@ -31,6 +30,7 @@ pub fn get_process_manager() -> &'static ProcessManager {
 pub struct ProcessManager {
     processes: RwLock<BTreeMap<ProcessId, Arc<Process>>>,
     ready_queue: Mutex<VecDeque<ProcessId>>,
+    // block_queue: Mutex<VecDeque<ProcessId>>,
     app_list: boot::AppListRef,
 }
 
@@ -38,6 +38,7 @@ impl ProcessManager {
     pub fn new(init: Arc<Process>, app_list: boot::AppListRef) -> Self {
         let mut processes = BTreeMap::new();
         let ready_queue = VecDeque::new();
+        // let block_queue = VecDeque::new();
         let pid = init.pid();
 
         trace!("Init {:#?}", init);
@@ -46,6 +47,7 @@ impl ProcessManager {
         Self {
             processes: RwLock::new(processes),
             ready_queue: Mutex::new(ready_queue),
+            // block_queue: Mutex::new(block_queue),
             app_list: app_list,
         }
     }
@@ -54,6 +56,11 @@ impl ProcessManager {
     pub fn push_ready(&self, pid: ProcessId) {
         self.ready_queue.lock().push_back(pid);
     }
+
+    // #[inline]
+    // pub fn push_block(&self, pid: ProcessId) {
+    //     self.block_queue.lock().push_back(pid);
+    // }
 
     #[inline]
     fn add_proc(&self, pid: ProcessId, proc: Arc<Process>) {
@@ -68,6 +75,11 @@ impl ProcessManager {
     pub fn current(&self) -> Arc<Process> {
         self.get_proc(&processor::get_pid())
             .expect("No current process")
+    }
+
+    pub fn wake_up(&self, pid: &ProcessId) {
+        self.get_proc(pid).unwrap().write().pause();
+        self.ready_queue.lock().push_front(*pid);
     }
 
     pub fn get_exit_code(&self, pid: &ProcessId) -> Option<isize> {
@@ -120,7 +132,7 @@ impl ProcessManager {
         pid
     }
 
-    pub fn save_current(&self, context: &ProcessContext) {
+    pub fn save_current(&self, context: &ProcessContext) -> ProcessId {
         // save now current into process context
         let temp = self.current();
         let mut nowproc = temp.write();
@@ -129,7 +141,7 @@ impl ProcessManager {
         // update current process's context
         nowproc.save(context);
         // push current process to ready queue if still alive
-        self.push_ready(get_pid());
+        temp.pid()
     }
 
     pub fn switch_next(&self, context: &mut ProcessContext) -> ProcessId {
@@ -186,7 +198,7 @@ impl ProcessManager {
             return;
         }
 
-        trace!("Kill {:#?}", &proc);
+        trace!("Kill Porcess {:?}", pid);
 
         proc.kill(ret);
     }
@@ -227,16 +239,17 @@ impl ProcessManager {
         }
     }
 
-    pub fn fork(&self) {
+    pub fn fork(&self) -> Arc<Process> {
         // FIXME: get current process
         let proc = self.current();
         // FIXME: fork to get child
         let child = proc.fork();
         // FIXME: add child to process list
         self.add_proc(child.pid(), child.clone());
-        self.push_ready(child.pid());
         // FOR DBG: maybe print the process ready queue?
-        print_process_list();
+        debug!("Ready Queue: {:?}", self.ready_queue.lock());
+
+        child
     }
 
     pub fn read(&self, fd: u8, buf: &mut [u8]) -> isize {
@@ -245,5 +258,9 @@ impl ProcessManager {
 
     pub fn write(&self, fd: u8, buf: &[u8]) -> isize {
         self.current().write().write(fd, buf)
+    }
+
+    pub fn block_pid(&self, pid: &ProcessId) {
+        self.get_proc(&pid).unwrap().write().block();
     }
 }

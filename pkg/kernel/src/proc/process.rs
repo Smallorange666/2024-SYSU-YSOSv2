@@ -149,7 +149,7 @@ impl Process {
         trace!(
             "Parent {} forked: {}#{}",
             inner.name,
-            cal_pid_from_stackframe(child_inner.context.stack_frame()),
+            child_pid,
             child_inner.name
         );
         // FIXME: make the arc of child
@@ -187,6 +187,10 @@ impl ProcessInner {
 
     pub fn resume(&mut self) {
         self.status = ProgramStatus::Running;
+    }
+
+    pub fn block(&mut self) {
+        self.status = ProgramStatus::Blocked;
     }
 
     pub fn exit_code(&self) -> Option<isize> {
@@ -233,6 +237,26 @@ impl ProcessInner {
         self.parent.as_ref().and_then(|p| p.upgrade())
     }
 
+    pub fn add_child(&mut self, child: Arc<Process>) {
+        self.children.push(child);
+    }
+
+    pub fn sem_wait(&mut self, key: u32, pid: ProcessId) -> SemaphoreResult {
+        self.proc_data.as_mut().unwrap().sem_wait(key, pid)
+    }
+
+    pub fn sem_signal(&mut self, key: u32) -> SemaphoreResult {
+        self.proc_data.as_mut().unwrap().sem_signal(key)
+    }
+
+    pub fn new_sem(&mut self, key: u32, value: usize) -> bool {
+        self.proc_data.as_mut().unwrap().new_sem(key, value)
+    }
+
+    pub fn remove_sem(&mut self, key: u32) -> bool {
+        self.proc_data.as_mut().unwrap().remove_sem(key)
+    }
+
     pub fn kill(&mut self, ret: isize) {
         // set exit code
         self.exit_code = Some(ret);
@@ -271,6 +295,40 @@ impl ProcessInner {
             .set_stack(VirtAddr::new(stack_bottom), STACK_DEF_PAGE);
 
         stack_top
+    }
+
+    pub fn init_child_stack(
+        &mut self,
+        parent: &Weak<Process>,
+        child_page_table: &PageTableContext,
+    ) -> (u64, u64) {
+        let parent = parent.upgrade().unwrap();
+        let parent_stack = self.stack_segment.unwrap();
+        let count = parent.pid().0 + self.children.len() as u16;
+        let mut child_stack_bottom =
+            STACK_MAX - (count - 1) as u64 * STACK_MAX_SIZE - STACK_DEF_SIZE;
+        let child_stack_count = parent_stack.end - parent_stack.start;
+        let frame_allocator = &mut *get_frame_alloc_for_sure();
+        while map_range(
+            child_stack_bottom,
+            child_stack_count,
+            &mut child_page_table.mapper(),
+            frame_allocator,
+            true,
+        )
+        .is_err()
+        {
+            trace!("Map child stack to {:#x} failed.", child_stack_bottom);
+            child_stack_bottom -= STACK_MAX_SIZE; // stack grow down
+        }
+
+        Self::clone_range(
+            parent_stack.start.start_address().as_u64(),
+            child_stack_bottom,
+            child_stack_count as usize,
+        );
+
+        (child_stack_bottom, child_stack_count)
     }
 
     pub fn load_elf(
@@ -319,58 +377,30 @@ impl ProcessInner {
         }
     }
     pub fn fork(&mut self, parent: Weak<Process>) -> ProcessInner {
-        let parent = parent.upgrade().unwrap();
         // FIXME: get current process's stack info
-        let parent_stack = self.stack_segment.unwrap();
-
         // FIXME: clone the process data struct
         let mut child_proc_data = self.proc_data.as_ref().unwrap().clone();
         // FIXME: clone the page table context (see instructions)
         let child_page_table = self.page_table.as_ref().unwrap().fork();
         // FIXME: alloc & map new stack for child (see instructions)
         // FIXME: copy the *entire stack* from parent to child
-        let count = parent.pid().0 + self.children.len() as u16;
-        let mut child_stack_bottom =
-            STACK_MAX - (count - 1) as u64 * STACK_MAX_SIZE - STACK_DEF_SIZE;
-        let child_stack_count = parent_stack.end - parent_stack.start;
-        let frame_allocator = &mut *get_frame_alloc_for_sure();
-        trace!("Original child_stack_bottom: {:x}", child_stack_bottom);
-        while map_range(
-            child_stack_bottom,
-            child_stack_count,
-            &mut child_page_table.mapper(),
-            frame_allocator,
-            true,
-        )
-        .is_err()
-        {
-            trace!("Map child stack to {:#x} failed.", child_stack_bottom);
-            child_stack_bottom -= STACK_MAX_SIZE; // stack grow down
-        }
-
-        Self::clone_range(
-            parent_stack.start.start_address().as_u64(),
-            child_stack_bottom,
-            child_stack_count as usize,
-        );
-
+        let (child_stack_bottom, child_stack_count) =
+            self.init_child_stack(&parent, &child_page_table);
         // FIXME: update child's context with new *stack pointer*
         //          > update child's stack to new base
         //          > keep lower bits of *rsp*, update the higher bits
         //          > also update the stack record in process data
-        child_proc_data.set_stack(VirtAddr::new(child_stack_bottom), child_stack_count);
         let mut child_context = self.context.clone();
         let child_stack_top =
             (self.context.stack_top() & 0xFFFFFFFF) | child_stack_bottom & !(0xFFFFFFFF);
-        trace!("parent_stack_top: {:x?}", self.context.stack_top());
-        trace!("child_stack_top: {:x?}", child_stack_top);
         child_context.update_stack_frame(VirtAddr::new(child_stack_top));
+        child_proc_data.set_stack(VirtAddr::new(child_stack_bottom), child_stack_count);
         // FIXME: set the return value 0 for child with `context.set_rax`
         child_context.set_rax(0);
         // FIXME: construct the child process inner
         let child_inner = ProcessInner {
             name: self.name.clone(),
-            parent: Some(Arc::downgrade(&parent)),
+            parent: Some(parent),
             children: Vec::new(),
             ticks_passed: 0,
             status: ProgramStatus::Ready,

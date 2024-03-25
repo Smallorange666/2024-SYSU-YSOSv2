@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 syscall_def = { package = "ysos_syscall", path = "../syscall" }
 x86_64 = "0.14"
+spin = "0.9"
+ysos_kernel={package="ysos_kernel", path="../kernel"}
