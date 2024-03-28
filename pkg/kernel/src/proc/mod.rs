@@ -177,15 +177,15 @@ pub fn write(fd: u8, buf: &[u8]) -> isize {
 pub fn fork(context: &mut ProcessContext) {
     x86_64::instructions::interrupts::without_interrupts(|| {
         let manager = get_process_manager();
-        // FIXME: save_current as parent
+        // save_current as parent
         let pid = manager.save_current(context);
-        // FIXME: fork to get child
+        // fork to get child
         let child = manager.fork();
-        // FIXME: push to child & parent to ready queue
-        info!("Process {} forked Process {}", get_pid().0, child.pid());
+        // push to child & parent to ready queue
+        trace!("Process {} forked Process {}", get_pid().0, child.pid());
         manager.push_ready(child.pid());
         manager.push_ready(pid);
-        // FIXME: switch to next process
+        // switch to next process
         manager.switch_next(context);
     })
 }
@@ -227,13 +227,17 @@ pub fn sem_wait(key: u32, context: &mut ProcessContext) {
         let ret = manager.current().write().sem_wait(key, pid);
         match ret {
             SemaphoreResult::Ok => {
-                manager.save_current(context);
+                // info!("Philo {} get chopsticks {}", pid.0 - 3, key + 1);
                 context.set_rax(0);
             }
             SemaphoreResult::NotExist => context.set_rax(1),
             SemaphoreResult::Block(_pid) => {
-                // FIXME: save, block it, then switch to next
-                //        maybe use `save_current` and `switch_next`
+                // save, block it, then switch to next
+                // info!(
+                //     "Philo {} try to get chopsticks {}, but be blocked",
+                //     pid.0 - 3,
+                //     key + 1
+                // );
                 manager.save_current(context);
                 manager.block_pid(&pid);
                 manager.switch_next(context);
@@ -248,9 +252,18 @@ pub fn sem_signal(key: u32, context: &mut ProcessContext) {
         let manager = get_process_manager();
         let ret = manager.current().write().sem_signal(key);
         match ret {
-            SemaphoreResult::Ok => context.set_rax(0),
+            SemaphoreResult::Ok => {
+                // info!("Philo {} release chopsticks {}", get_pid().0 - 3, key + 1);
+                context.set_rax(0);
+            }
             SemaphoreResult::NotExist => context.set_rax(1),
             SemaphoreResult::WakeUp(pid) => {
+                // info!(
+                //     "Philo {} release chopsticks {}, and wake up Philo {}",
+                //     get_pid().0 - 3,
+                //     key + 1,
+                //     pid.0 - 3
+                // );
                 manager.wake_up(&pid);
             }
             _ => unreachable!(),

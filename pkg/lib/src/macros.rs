@@ -8,7 +8,6 @@ macro_rules! entry {
         #[export_name = "_start"]
         pub extern "C" fn __impl_start() {
             let ret = $fn();
-            // after syscall, add lib::sys_exit(ret);
             sys_exit(ret);
         }
     };

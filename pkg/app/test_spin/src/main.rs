@@ -38,7 +38,7 @@ fn main() -> isize {
 
 fn do_counter_inc() {
     for _ in 0..100 {
-        // FIXME: protect the critical section
+        // protect the critical section
         SPINLOCK.acquire();
         inc_counter();
         SPINLOCK.release();

@@ -79,7 +79,7 @@ impl ProcessManager {
 
     pub fn wake_up(&self, pid: &ProcessId) {
         self.get_proc(pid).unwrap().write().pause();
-        self.ready_queue.lock().push_front(*pid);
+        self.push_ready(*pid);
     }
 
     pub fn get_exit_code(&self, pid: &ProcessId) -> Option<isize> {
@@ -240,13 +240,13 @@ impl ProcessManager {
     }
 
     pub fn fork(&self) -> Arc<Process> {
-        // FIXME: get current process
+        // get current process
         let proc = self.current();
-        // FIXME: fork to get child
+        // fork to get child
         let child = proc.fork();
-        // FIXME: add child to process list
+        // add child to process list
         self.add_proc(child.pid(), child.clone());
-        // FOR DBG: maybe print the process ready queue?
+        // maybe print the process ready queue?
         debug!("Ready Queue: {:?}", self.ready_queue.lock());
 
         child

@@ -32,6 +32,7 @@ fn main() -> isize {
         sys_wait_pid(pids[i]);
     }
 
+    SEM.remove();
     println!("COUNTER result: {}", unsafe { COUNTER });
 
     0
@@ -39,7 +40,7 @@ fn main() -> isize {
 
 fn do_counter_inc() {
     for _ in 0..100 {
-        // FIXME: protect the critical section
+        // protect the critical section
         SEM.wait();
         inc_counter();
         SEM.signal();

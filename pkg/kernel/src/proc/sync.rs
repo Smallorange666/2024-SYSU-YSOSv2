@@ -41,9 +41,9 @@ impl Semaphore {
     /// if the count is 0, then push the process into the wait queue
     /// else decrease the count and return Ok
     pub fn wait(&mut self, pid: ProcessId) -> SemaphoreResult {
-        // FIXME: if the count is 0, then push pid into the wait queue
-        //          return Block(pid)
-        // FIXME: else decrease the count and return Ok
+        // if the count is 0, then push pid into the wait queue
+        //    return Block(pid)
+        // else decrease the count and return Ok
         if self.count == 0 {
             self.wait_queue.push_back(pid);
             return SemaphoreResult::Block(pid);
@@ -58,10 +58,9 @@ impl Semaphore {
     /// if the wait queue is not empty, then pop a process from the wait queue
     /// else increase the count
     pub fn signal(&mut self) -> SemaphoreResult {
-        // FIXME: if the wait queue is not empty
-        //          pop a process from the wait queue
-        //          return WakeUp(pid)
-        // FIXME: else increase the count and return Ok
+        // if the wait queue is not empty pop a process
+        //      from the wait queue return WakeUp(pid)
+        // else increase the count and return Ok
 
         if let Some(pid) = self.wait_queue.pop_front() {
             return SemaphoreResult::WakeUp(pid);

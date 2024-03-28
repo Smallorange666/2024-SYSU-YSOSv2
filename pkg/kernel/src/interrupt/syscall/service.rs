@@ -104,7 +104,7 @@ pub fn sys_time() -> u64 {
 }
 
 pub fn sys_fork(context: &mut ProcessContext) {
-    info!("Process {} is forking", get_pid());
+    trace!("Process {} is forking", get_pid());
     fork(context);
 }
 

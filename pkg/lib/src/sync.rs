@@ -17,7 +17,7 @@ impl SpinLock {
     }
 
     pub fn acquire(&self) {
-        // FIXME: acquire the lock, spin if the lock is not available
+        // acquire the lock, spin if the lock is not available
         loop {
             if self
                 .bolt
@@ -32,16 +32,15 @@ impl SpinLock {
     }
 
     pub fn release(&self) {
-        // FIXME: release the lock
+        // release the lock
         self.bolt.store(false, Ordering::SeqCst);
     }
 }
 
-unsafe impl Sync for SpinLock {} // Why? Check reflection question 5
+unsafe impl Sync for SpinLock {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Semaphore {
-    /* FIXME: record the sem key */
     key: u32,
 }
 

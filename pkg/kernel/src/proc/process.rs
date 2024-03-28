@@ -139,29 +139,28 @@ impl Process {
     }
 
     pub fn fork(self: &Arc<Self>) -> Arc<Self> {
-        // FIXME: lock inner as write
+        // lock inner as write
         let mut inner = self.write();
-        // FIXME: inner fork with parent weak ref
+        // inner fork with parent weak ref
         let child_pid = ProcessId::new();
         let child_inner = inner.fork(Arc::downgrade(self));
-        // FOR DBG: maybe print the child process info
-        //          e.g. parent, name, pid, etc.
+        // print the child process info
         trace!(
             "Parent {} forked: {}#{}",
             inner.name,
             child_pid,
             child_inner.name
         );
-        // FIXME: make the arc of child
+        // make the arc of child
         let child_proc = Arc::new(Self {
             pid: child_pid,
             inner: Arc::new(RwLock::new(child_inner)),
         });
-        // FIXME: add child to current process's children list
+        // add child to current process's children list
         inner.children.push(child_proc.clone());
-        // FIXME: set fork ret value for parent with `context.set_rax`
+        // set fork ret value for parent with `context.set_rax`
         inner.context.set_rax(child_pid.0 as usize);
-        // FIXME: mark the child as ready & return it
+        // mark the child as ready & return it
         child_proc.write().pause();
 
         child_proc
@@ -377,27 +376,23 @@ impl ProcessInner {
         }
     }
     pub fn fork(&mut self, parent: Weak<Process>) -> ProcessInner {
-        // FIXME: get current process's stack info
-        // FIXME: clone the process data struct
+        // clone the process data struct
         let mut child_proc_data = self.proc_data.as_ref().unwrap().clone();
-        // FIXME: clone the page table context (see instructions)
+        // clone the page table context (see instructions)
         let child_page_table = self.page_table.as_ref().unwrap().fork();
-        // FIXME: alloc & map new stack for child (see instructions)
-        // FIXME: copy the *entire stack* from parent to child
+        // alloc & map new stack for child (see instructions)
+        // copy the *entire stack* from parent to child
         let (child_stack_bottom, child_stack_count) =
             self.init_child_stack(&parent, &child_page_table);
-        // FIXME: update child's context with new *stack pointer*
-        //          > update child's stack to new base
-        //          > keep lower bits of *rsp*, update the higher bits
-        //          > also update the stack record in process data
+        // update child's stack frame
         let mut child_context = self.context.clone();
         let child_stack_top =
             (self.context.stack_top() & 0xFFFFFFFF) | child_stack_bottom & !(0xFFFFFFFF);
         child_context.update_stack_frame(VirtAddr::new(child_stack_top));
         child_proc_data.set_stack(VirtAddr::new(child_stack_bottom), child_stack_count);
-        // FIXME: set the return value 0 for child with `context.set_rax`
+        // set the return value 0 for child with `context.set_rax`
         child_context.set_rax(0);
-        // FIXME: construct the child process inner
+        // construct the child process inner
         let child_inner = ProcessInner {
             name: self.name.clone(),
             parent: Some(parent),
@@ -409,7 +404,7 @@ impl ProcessInner {
             page_table: Some(child_page_table),
             proc_data: Some(child_proc_data),
         };
-        // NOTE: return inner because there's no pid record in inner
+
         child_inner
     }
 }

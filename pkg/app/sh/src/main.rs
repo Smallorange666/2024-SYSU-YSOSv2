@@ -41,7 +41,7 @@ fn main() -> isize {
                     println!("Failed to run app: {}", op);
                     continue;
                 } else {
-                    sys_wait_pid(pid);
+                    println!("{} exited with {}", op.as_str(), sys_wait_pid(pid));
                 }
             }
         }

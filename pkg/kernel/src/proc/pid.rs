@@ -8,7 +8,7 @@ static COUNTER: AtomicU16 = AtomicU16::new(0);
 impl ProcessId {
     pub fn new() -> Self {
         COUNTER.fetch_add(1, Ordering::SeqCst);
-        info!("New ProcessId: {}", COUNTER.load(Ordering::SeqCst));
+        trace!("New ProcessId: {}", COUNTER.load(Ordering::SeqCst));
         ProcessId(COUNTER.load(Ordering::SeqCst))
     }
 }
