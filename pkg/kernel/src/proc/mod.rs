@@ -193,6 +193,7 @@ pub fn fork(context: &mut ProcessContext) {
 pub fn exit(ret: isize, context: &mut ProcessContext) {
     x86_64::instructions::interrupts::without_interrupts(|| {
         let manager = get_process_manager();
+        manager.wake_waiting(ret);
         manager.kill_self(ret);
         manager.switch_next(context);
     })
@@ -202,15 +203,20 @@ pub fn get_pid() -> ProcessId {
     processor::get_pid()
 }
 
-pub fn wait_pid(pid: ProcessId) -> isize {
+pub fn wait_pid(pid: ProcessId, context: &mut ProcessContext) {
     x86_64::instructions::interrupts::without_interrupts(|| {
-        if !still_alive(pid) {
-            let exit_code = get_process_manager().get_exit_code(&pid).unwrap();
-            return exit_code;
+        if still_alive(pid) {
+            let manager = get_process_manager();
+            let now_pid = get_pid();
+            manager.save_current(context);
+            manager.block_proc(&now_pid);
+            manager.add_waiting(pid);
+            manager.switch_next(context);
         } else {
-            return -1;
+            let exit_code = get_process_manager().get_exit_code(pid).unwrap();
+            context.set_rax(exit_code as usize);
         }
-    })
+    });
 }
 
 #[inline]
@@ -226,20 +232,12 @@ pub fn sem_wait(key: u32, context: &mut ProcessContext) {
         let pid = processor::get_pid();
         let ret = manager.current().write().sem_wait(key, pid);
         match ret {
-            SemaphoreResult::Ok => {
-                // info!("Philo {} get chopsticks {}", pid.0 - 3, key + 1);
-                context.set_rax(0);
-            }
+            SemaphoreResult::Ok => context.set_rax(0),
             SemaphoreResult::NotExist => context.set_rax(1),
             SemaphoreResult::Block(_pid) => {
                 // save, block it, then switch to next
-                // info!(
-                //     "Philo {} try to get chopsticks {}, but be blocked",
-                //     pid.0 - 3,
-                //     key + 1
-                // );
                 manager.save_current(context);
-                manager.block_pid(&pid);
+                manager.block_proc(&pid);
                 manager.switch_next(context);
             }
             _ => unreachable!(),
@@ -252,20 +250,9 @@ pub fn sem_signal(key: u32, context: &mut ProcessContext) {
         let manager = get_process_manager();
         let ret = manager.current().write().sem_signal(key);
         match ret {
-            SemaphoreResult::Ok => {
-                // info!("Philo {} release chopsticks {}", get_pid().0 - 3, key + 1);
-                context.set_rax(0);
-            }
+            SemaphoreResult::Ok => context.set_rax(0),
             SemaphoreResult::NotExist => context.set_rax(1),
-            SemaphoreResult::WakeUp(pid) => {
-                // info!(
-                //     "Philo {} release chopsticks {}, and wake up Philo {}",
-                //     get_pid().0 - 3,
-                //     key + 1,
-                //     pid.0 - 3
-                // );
-                manager.wake_up(&pid);
-            }
+            SemaphoreResult::WakeUp(pid) => manager.wake_up(pid),
             _ => unreachable!(),
         };
     })

@@ -46,10 +46,10 @@ impl Semaphore {
         // else decrease the count and return Ok
         if self.count == 0 {
             self.wait_queue.push_back(pid);
-            return SemaphoreResult::Block(pid);
+            SemaphoreResult::Block(pid)
         } else {
             self.count -= 1;
-            return SemaphoreResult::Ok;
+            SemaphoreResult::Ok
         }
     }
 
@@ -63,10 +63,10 @@ impl Semaphore {
         // else increase the count and return Ok
 
         if let Some(pid) = self.wait_queue.pop_front() {
-            return SemaphoreResult::WakeUp(pid);
+            SemaphoreResult::WakeUp(pid)
         } else {
             self.count += 1;
-            return SemaphoreResult::Ok;
+            SemaphoreResult::Ok
         }
     }
 }
@@ -111,9 +111,9 @@ impl SemaphoreSet {
         // FIXME: return NotExist if the semaphore is not exist
         if let Some(sem) = self.sems.get(&sid) {
             let mut sem = sem.lock();
-            return sem.wait(pid);
+            sem.wait(pid)
         } else {
-            return SemaphoreResult::NotExist;
+            SemaphoreResult::NotExist
         }
     }
 
@@ -126,9 +126,9 @@ impl SemaphoreSet {
         // FIXME: return NotExist if the semaphore is not exist
         if let Some(sem) = self.sems.get(&sid) {
             let mut sem = sem.lock();
-            return sem.signal();
+            sem.signal()
         } else {
-            return SemaphoreResult::NotExist;
+            SemaphoreResult::NotExist
         }
     }
 }

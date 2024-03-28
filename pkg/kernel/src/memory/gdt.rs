@@ -103,8 +103,8 @@ lazy_static! {
                 tss_selector,
             },
             UserSelectors {
-                user_code_selector: user_code_selector,
-                user_data_selector: user_data_selector,
+                user_code_selector,
+                user_data_selector,
             },
         )
     };

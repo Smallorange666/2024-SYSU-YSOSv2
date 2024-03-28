@@ -64,8 +64,8 @@ pub fn dispatcher(context: &mut ProcessContext) {
         // exit process with retcode
         Syscall::Exit => sys_exit_process(&args, context),
         // pid: arg0 as u16 -> status: isize
-        // check if the process is running or get retcode
-        Syscall::WaitPid => context.set_rax(sys_wait_pid(&args) as usize),
+        // block itself and wait until the process exit and be woke up
+        Syscall::WaitPid => sys_wait_pid(&args, context),
 
         // None
         Syscall::Stat => sys_list_process(),

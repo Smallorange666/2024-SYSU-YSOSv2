@@ -46,7 +46,7 @@ pub const fn get_ascii_header() -> &'static str {
 pub fn wait(pid: ProcessId) {
     loop {
         // try to get the status of the process
-        let exit_code = get_process_manager().get_exit_code(&pid);
+        let exit_code = get_process_manager().get_exit_code(pid);
         if exit_code.is_none() {
             x86_64::instructions::hlt();
         } else {

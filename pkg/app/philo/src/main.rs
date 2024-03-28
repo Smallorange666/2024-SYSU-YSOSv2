@@ -8,6 +8,7 @@ use lib::{sync::Semaphore, *};
 
 const PHILO_NUM: usize = 5;
 static CHOPSTICKS_SEM: [Semaphore; PHILO_NUM] = semaphore_array![0, 1, 2, 3, 4];
+static SERVER: Semaphore = Semaphore::new(5);
 
 fn main() -> isize {
     let mut pids = [0u16; PHILO_NUM];
@@ -15,6 +16,7 @@ fn main() -> isize {
     for i in 0..PHILO_NUM {
         CHOPSTICKS_SEM[i].init(1);
     }
+    SERVER.init(1);
 
     for i in 0..PHILO_NUM {
         let pid = sys_fork();
@@ -38,20 +40,21 @@ fn main() -> isize {
 }
 
 fn hungry(order: usize, rng: &mut ChaCha20Rng) {
-    if order < 4 {
-        sleep(randnum(rng) % 4);
-        CHOPSTICKS_SEM[order].wait();
-        sleep(randnum(rng) % 4);
-        CHOPSTICKS_SEM[(order + 1) % PHILO_NUM].wait();
-    } else {
-        sleep(randnum(rng) % 4);
-        CHOPSTICKS_SEM[(order + 1) % PHILO_NUM].wait();
-        sleep(randnum(rng) % 4);
-        CHOPSTICKS_SEM[order].wait();
-    }
+    SERVER.wait();
+    check(order);
+    CHOPSTICKS_SEM[order].wait();
+    CHOPSTICKS_SEM[(order + 1) % PHILO_NUM].wait();
+    SERVER.signal();
 
     sleep(randnum(rng) % 5);
     println!("Philo {} have eaten.", order + 1);
+    CHOPSTICKS_SEM[order].signal();
+    CHOPSTICKS_SEM[(order + 1) % PHILO_NUM].signal();
+}
+
+fn check(order: usize) {
+    CHOPSTICKS_SEM[order].wait();
+    CHOPSTICKS_SEM[(order + 1) % PHILO_NUM].wait();
     CHOPSTICKS_SEM[order].signal();
     CHOPSTICKS_SEM[(order + 1) % PHILO_NUM].signal();
 }

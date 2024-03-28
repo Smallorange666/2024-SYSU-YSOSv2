@@ -12,7 +12,7 @@ pub fn sys_spawn_process(args: &SyscallArgs) -> usize {
     let name = unsafe {
         core::str::from_utf8_unchecked(core::slice::from_raw_parts(
             args.arg0 as *const u8,
-            args.arg1 as usize,
+            args.arg1,
         ))
     };
     // spawn the process by name
@@ -27,17 +27,14 @@ pub fn sys_spawn_process(args: &SyscallArgs) -> usize {
 
 pub fn sys_write(args: &SyscallArgs) -> usize {
     // get buffer and fd by args
-    let buf = unsafe { core::slice::from_raw_parts(args.arg1 as *const u8, args.arg2 as usize) };
+    let buf = unsafe { core::slice::from_raw_parts(args.arg1 as *const u8, args.arg2) };
     // call proc::write -> isize
-    let result = proc::write(args.arg0 as u8, buf) as usize;
-    // return the result as usize
-    result
+    proc::write(args.arg0 as u8, buf) as usize
 }
 
 pub fn sys_read(args: &SyscallArgs) -> usize {
-    let buf = unsafe { core::slice::from_raw_parts_mut(args.arg1 as *mut u8, args.arg2 as usize) };
-    let result = proc::read(args.arg0 as u8, buf) as usize;
-    result
+    let buf = unsafe { core::slice::from_raw_parts_mut(args.arg1 as *mut u8, args.arg2) };
+    proc::read(args.arg0 as u8, buf) as usize
 }
 
 pub fn sys_exit_process(args: &SyscallArgs, context: &mut ProcessContext) {
@@ -50,9 +47,9 @@ pub fn sys_list_process() {
     proc::print_process_list();
 }
 
-pub fn sys_wait_pid(args: &SyscallArgs) -> isize {
+pub fn sys_wait_pid(args: &SyscallArgs, context: &mut ProcessContext) {
     let pid = ProcessId(args.arg0 as u16);
-    wait_pid(pid)
+    wait_pid(pid, context);
 }
 
 pub fn sys_allocate(args: &SyscallArgs) -> usize {
@@ -93,7 +90,7 @@ pub fn sys_print_info(args: &SyscallArgs) -> isize {
     if still_alive(pid) && get_process_manager().print_process_info(&pid) {
         0
     } else {
-        return -1;
+        -1
     }
 }
 

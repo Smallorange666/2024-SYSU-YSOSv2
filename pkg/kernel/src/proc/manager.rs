@@ -2,7 +2,7 @@ use crate::memory::{get_frame_alloc_for_sure, PHYSICAL_OFFSET};
 
 use super::*;
 
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::sync::Weak;
 use alloc::{collections::VecDeque, format, sync::Arc};
 use spin::mutex::Mutex;
@@ -30,7 +30,7 @@ pub fn get_process_manager() -> &'static ProcessManager {
 pub struct ProcessManager {
     processes: RwLock<BTreeMap<ProcessId, Arc<Process>>>,
     ready_queue: Mutex<VecDeque<ProcessId>>,
-    // block_queue: Mutex<VecDeque<ProcessId>>,
+    waiting_processes: Mutex<BTreeMap<ProcessId, BTreeSet<ProcessId>>>,
     app_list: boot::AppListRef,
 }
 
@@ -38,7 +38,7 @@ impl ProcessManager {
     pub fn new(init: Arc<Process>, app_list: boot::AppListRef) -> Self {
         let mut processes = BTreeMap::new();
         let ready_queue = VecDeque::new();
-        // let block_queue = VecDeque::new();
+        let waiting_processes = BTreeMap::new();
         let pid = init.pid();
 
         trace!("Init {:#?}", init);
@@ -47,8 +47,8 @@ impl ProcessManager {
         Self {
             processes: RwLock::new(processes),
             ready_queue: Mutex::new(ready_queue),
-            // block_queue: Mutex::new(block_queue),
-            app_list: app_list,
+            waiting_processes: Mutex::new(waiting_processes),
+            app_list,
         }
     }
 
@@ -57,10 +57,14 @@ impl ProcessManager {
         self.ready_queue.lock().push_back(pid);
     }
 
-    // #[inline]
-    // pub fn push_block(&self, pid: ProcessId) {
-    //     self.block_queue.lock().push_back(pid);
-    // }
+    #[inline]
+    pub fn add_waiting(&self, pid: ProcessId) {
+        self.waiting_processes
+            .lock()
+            .entry(pid)
+            .or_default()
+            .insert(get_pid());
+    }
 
     #[inline]
     fn add_proc(&self, pid: ProcessId, proc: Arc<Process>) {
@@ -72,18 +76,37 @@ impl ProcessManager {
         self.processes.read().get(pid).cloned()
     }
 
+    #[inline]
+    pub fn block_proc(&self, pid: &ProcessId) {
+        self.get_proc(pid).unwrap().write().block();
+    }
     pub fn current(&self) -> Arc<Process> {
         self.get_proc(&processor::get_pid())
             .expect("No current process")
     }
 
-    pub fn wake_up(&self, pid: &ProcessId) {
-        self.get_proc(pid).unwrap().write().pause();
-        self.push_ready(*pid);
+    pub fn wake_up(&self, pid: ProcessId) {
+        self.get_proc(&pid).unwrap().write().pause();
+        self.push_ready(pid);
     }
 
-    pub fn get_exit_code(&self, pid: &ProcessId) -> Option<isize> {
-        self.get_proc(pid).unwrap().read().exit_code()
+    pub fn wake_waiting(&self, ret: isize) {
+        let now_pid = get_pid();
+        let mut wait_proc = self.waiting_processes.lock();
+        if let Some(wait_set) = wait_proc.remove(&now_pid) {
+            for pid in wait_set {
+                self.get_proc(&pid)
+                    .unwrap()
+                    .write()
+                    .context()
+                    .set_rax(ret as usize);
+                self.wake_up(pid);
+            }
+        }
+    }
+
+    pub fn get_exit_code(&self, pid: ProcessId) -> Option<isize> {
+        self.get_proc(&pid).unwrap().read().exit_code()
     }
 
     pub fn app_list(&self) -> boot::AppListRef {
@@ -222,7 +245,7 @@ impl ProcessManager {
     }
 
     pub fn print_process_info(&self, pid: &ProcessId) -> bool {
-        if let Some(proc) = self.get_proc(&pid) {
+        if let Some(proc) = self.get_proc(pid) {
             proc.read().print_info();
             true
         } else {
@@ -232,7 +255,7 @@ impl ProcessManager {
     }
 
     pub fn is_proc_alive(&self, pid: &ProcessId) -> bool {
-        if let Some(proc) = self.get_proc(&pid) {
+        if let Some(proc) = self.get_proc(pid) {
             proc.read().status() != ProgramStatus::Dead
         } else {
             false
@@ -258,9 +281,5 @@ impl ProcessManager {
 
     pub fn write(&self, fd: u8, buf: &[u8]) -> isize {
         self.current().write().write(fd, buf)
-    }
-
-    pub fn block_pid(&self, pid: &ProcessId) {
-        self.get_proc(&pid).unwrap().write().block();
     }
 }

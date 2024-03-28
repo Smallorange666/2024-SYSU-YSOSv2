@@ -385,7 +385,7 @@ impl ProcessInner {
         let (child_stack_bottom, child_stack_count) =
             self.init_child_stack(&parent, &child_page_table);
         // update child's stack frame
-        let mut child_context = self.context.clone();
+        let mut child_context = self.context;
         let child_stack_top =
             (self.context.stack_top() & 0xFFFFFFFF) | child_stack_bottom & !(0xFFFFFFFF);
         child_context.update_stack_frame(VirtAddr::new(child_stack_top));
@@ -393,7 +393,7 @@ impl ProcessInner {
         // set the return value 0 for child with `context.set_rax`
         child_context.set_rax(0);
         // construct the child process inner
-        let child_inner = ProcessInner {
+        ProcessInner {
             name: self.name.clone(),
             parent: Some(parent),
             children: Vec::new(),
@@ -403,9 +403,7 @@ impl ProcessInner {
             context: child_context,
             page_table: Some(child_page_table),
             proc_data: Some(child_proc_data),
-        };
-
-        child_inner
+        }
     }
 }
 
