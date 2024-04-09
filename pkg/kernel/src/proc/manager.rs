@@ -148,9 +148,8 @@ impl ProcessManager {
         trace!("New {:#?}", &proc);
 
         // something like kernel thread
-        let manager = get_process_manager();
-        manager.add_proc(proc.pid(), proc.clone());
-        manager.push_ready(proc.pid());
+        self.add_proc(proc.pid(), proc.clone());
+        self.push_ready(proc.pid());
 
         pid
     }

@@ -26,23 +26,6 @@ pub const fn get_ascii_header() -> &'static str {
     )
 }
 
-// pub fn new_test_thread(id: &str) -> ProcessId {
-//     trace!("New test thread: {}", id);
-//     let mut proc_data = ProcessData::new();
-//     proc_data.set_env("id", id);
-
-//     spawn_kernel_thread(func::test, format!("#{}_test", id), Some(proc_data))
-// }
-
-// pub fn new_stack_test_thread() {
-//     trace!("new_stack_test_thread");
-//     let pid = spawn_kernel_thread(func::stack_test, alloc::string::String::from("stack"), None);
-
-//     // wait for progress exit
-//     wait(pid);
-//     trace!("stack_test_thread exit");
-// }
-
 pub fn wait(pid: ProcessId) {
     loop {
         // try to get the status of the process

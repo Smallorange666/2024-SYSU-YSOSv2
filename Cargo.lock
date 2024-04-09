@@ -39,6 +39,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "chrono"
+version = "0.4.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a0d04d43504c61aa6c7531f1871dd0d418d91130162063b789da00fd7057a5e"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "crossbeam-queue"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -59,6 +68,12 @@ version = "0.1.0"
 dependencies = [
  "yslib",
 ]
+
+[[package]]
+name = "hex-literal"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "lazy_static"
@@ -112,6 +127,15 @@ name = "mytest"
 version = "0.1.0"
 dependencies = [
  "yslib",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da0df0e5185db44f69b44f26786fe401b6c293d1907744beaa7fa62b2e5a517a"
+dependencies = [
+ "autocfg",
 ]
 
 [[package]]
@@ -496,7 +520,21 @@ dependencies = [
  "xmas-elf",
  "ysos_boot",
  "ysos_elf",
+ "ysos_storage",
  "ysos_syscall",
+]
+
+[[package]]
+name = "ysos_storage"
+version = "0.6.0"
+dependencies = [
+ "bitflags 2.4.2",
+ "chrono",
+ "hex-literal",
+ "log",
+ "num_enum",
+ "paste",
+ "spin 0.9.8",
 ]
 
 [[package]]

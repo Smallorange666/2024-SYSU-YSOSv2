@@ -20,6 +20,7 @@ extern crate libm;
 
 #[macro_use]
 pub mod utils;
+use storage::{mbr::MbrTable, PartitionTable};
 pub use utils::*;
 
 #[macro_use]
@@ -35,6 +36,8 @@ pub use resource;
 pub use alloc::format;
 use boot::BootInfo;
 
+use crate::ata::AtaDrive;
+
 pub fn init(boot_info: &'static BootInfo) {
     serial::init(); // init serial output
     logger::init(boot_info.log_level); // init logger syste
@@ -47,6 +50,8 @@ pub fn init(boot_info: &'static BootInfo) {
     memory::init(boot_info); // init memory manager
     x86_64::instructions::interrupts::enable();
     info!("Interrupts Enabled.");
+
+    MbrTable::parse(AtaDrive::open(0, 0).unwrap()).expect("");
 
     info!("YatSenOS initialized.");
 }
