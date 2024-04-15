@@ -1,13 +1,13 @@
 pub mod bpb;
 pub mod directory;
 pub mod direntry;
-// pub mod file;
-// pub mod impls;
+pub mod file;
+pub mod impls;
 
 use crate::*;
 use directory::Directory;
 use direntry::*;
-// use file::File;
+use file::File;
 
 use bpb::Fat16Bpb;
 
@@ -18,13 +18,13 @@ pub struct Fat16 {
     handle: Fat16Handle,
 }
 
-// impl Fat16 {
-//     pub fn new(inner: impl BlockDevice<Block512>) -> Self {
-//         Self {
-//             handle: Arc::new(Fat16Impl::new(inner)),
-//         }
-//     }
-// }
+impl Fat16 {
+    pub fn new(inner: impl BlockDevice<Block512>) -> Self {
+        Self {
+            handle: Arc::new(Fat16Impl::new(inner)),
+        }
+    }
+}
 
 type Fat16Handle = Arc<Fat16Impl>;
 
