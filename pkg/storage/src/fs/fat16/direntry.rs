@@ -61,19 +61,21 @@ impl DirEntry {
         self.attributes.contains(Attributes::DIRECTORY)
     }
 
+    pub fn is_displayable(&self) -> bool {
+        !self.attributes.contains(Attributes::HIDDEN) && self.is_valid() && !self.is_long_name()
+    }
+
     /// For Standard 8.3 format
     ///
     /// reference: https://osdev.org/FAT#Standard_8.3_format
     pub fn parse(data: &[u8]) -> Result<DirEntry> {
         let filename = ShortFileName::new(&data[..11]);
 
-        // FIXME: parse the rest of the fields
-        //      - ensure you can pass the test
-        //      - you may need `prase_datetime` function
+        // parse the rest of the fields
         let created_time = prase_datetime(u32::from_le_bytes(data[14..18].try_into().unwrap()));
         let accessed_time = prase_datetime(u32::from_le_bytes([0, 0, data[18], data[19]]));
         let modified_time = prase_datetime(u32::from_le_bytes(data[22..26].try_into().unwrap()));
-        let attributes = Attributes::from_bits(data[11]).unwrap();
+        let attributes = Attributes::from_bits(data[11]).unwrap_or(Attributes::empty());
         let cluster = u32::from_le_bytes([data[26], data[27], data[20], data[21]]);
         let size = u32::from_le_bytes(data[28..32].try_into().unwrap());
         Ok(DirEntry {
@@ -93,7 +95,7 @@ impl DirEntry {
 }
 
 fn prase_datetime(time: u32) -> FsTime {
-    // FIXME: parse the year, month, day, hour, min, sec from time
+    // parse the year, month, day, hour, min, sec from time
     let year = ((time >> 25) & 0x7F) as i32 + 1980;
     let month = ((time >> 21) & 0x0F) as u32;
     let day = ((time >> 16) & 0x1F) as u32;
@@ -144,30 +146,19 @@ impl ShortFileName {
 
     /// Parse a short file name from a string
     pub fn parse(name: &str) -> Result<ShortFileName> {
-        // FIXME: implement the parse function
-        //      use `FilenameError` and into `FsError`
-        //      use different error types for following conditions:
-        //
-        //      - use 0x20 ' ' for right padding
-        //      - check if the filename is empty
-        //      - check if the name & ext are too long
-        //      - period `.` means the start of the file extension
-        //      - check if the period is misplaced (after 8 characters)
-        //      - check if the filename contains invalid characters:
-        //        [0x00..=0x1F, 0x20, 0x22, 0x2A, 0x2B, 0x2C, 0x2F, 0x3A,
-        //        0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x5B, 0x5C, 0x5D, 0x7C]
+        // implement the parse function
         if name.is_empty() {
             return Err(FilenameError::FilenameEmpty.into());
         }
-
-        if name.chars().nth(0) == Some('\x20') {
+        if name.contains('\x20') {
             return Err(FilenameError::MisplacedPeriod.into());
         }
+        let name = name.to_uppercase();
 
-        let (name, ext) = name.split_at(name.rfind('.').unwrap_or(0));
-        if name.len() == 0 || ext.len() == 0 {
-            return Err(FilenameError::MisplacedPeriod.into());
-        } else if name.len() > 8 || ext.len() > 3 {
+        let (name, mut ext) = name.split_at(name.rfind('.').unwrap_or(name.len()));
+        ext = ext.trim_start_matches('.');
+
+        if name.len() > 8 || ext.len() > 3 {
             return Err(FilenameError::NameTooLong.into());
         }
 
@@ -185,6 +176,7 @@ impl ShortFileName {
         }
 
         let name = format!("{:8}", name);
+        let ext = format!("{:3}", ext);
 
         Ok(ShortFileName {
             name: name.as_bytes().try_into().unwrap(),

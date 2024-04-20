@@ -33,10 +33,7 @@ impl Fat16Bpb {
         }
     }
 
-    // FIXME: define all the fields in the BPB
-    //      - use `define_field!` macro
-    //      - ensure you can pass the tests
-    //      - you may change the field names if you want
+    // define all the fields in the BPB
     define_field!([u8; 8], 0x03, oem_name);
     define_field!(u16, 0x0B, bytes_per_sector);
     define_field!(u8, 0x0D, sectors_per_cluster);

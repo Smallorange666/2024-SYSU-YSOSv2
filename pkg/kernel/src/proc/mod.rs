@@ -281,3 +281,15 @@ pub fn remove_sem(key: u32) -> usize {
         }
     })
 }
+
+pub fn open_file(path: &str) -> u8 {
+    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().open_file(path))
+}
+
+pub fn close_file(fd: u8) -> bool {
+    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().close_file(fd))
+}
+
+pub fn cat(fd: u8) {
+    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().cat(fd))
+}

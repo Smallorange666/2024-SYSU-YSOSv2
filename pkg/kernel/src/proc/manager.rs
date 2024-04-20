@@ -7,7 +7,6 @@ use alloc::sync::Weak;
 use alloc::{collections::VecDeque, format, sync::Arc};
 use spin::mutex::Mutex;
 use spin::RwLock;
-
 use x86_64::VirtAddr;
 
 pub static PROCESS_MANAGER: spin::Once<ProcessManager> = spin::Once::new();
@@ -280,5 +279,17 @@ impl ProcessManager {
 
     pub fn write(&self, fd: u8, buf: &[u8]) -> isize {
         self.current().write().write(fd, buf)
+    }
+
+    pub fn open_file(&self, path: &str) -> u8 {
+        self.current().write().open_file(path)
+    }
+
+    pub fn close_file(&self, fd: u8) -> bool {
+        self.current().write().close_file(fd)
+    }
+
+    pub fn cat(&self, fd: u8) {
+        self.current().write().cat(fd)
     }
 }

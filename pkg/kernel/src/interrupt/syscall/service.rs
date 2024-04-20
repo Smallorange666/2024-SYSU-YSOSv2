@@ -1,9 +1,8 @@
-use core::alloc::Layout;
-
 use super::SyscallArgs;
-use crate::proc;
 use crate::proc::*;
 use crate::runtime::get_uefi_runtime_for_sure;
+use crate::{filesystem, proc};
+use core::alloc::Layout;
 
 pub fn sys_spawn_process(args: &SyscallArgs) -> usize {
     // get app name by args
@@ -42,9 +41,25 @@ pub fn sys_exit_process(args: &SyscallArgs, context: &mut ProcessContext) {
     proc::exit(args.arg0 as isize, context);
 }
 
+pub fn sys_list_app() {
+    // list all processes
+    proc::list_app();
+}
+
 pub fn sys_list_process() {
     // list all processes
     proc::print_process_list();
+}
+
+pub fn sys_list_dir(args: &SyscallArgs) {
+    // get path by args
+    let path = unsafe {
+        core::str::from_utf8_unchecked(core::slice::from_raw_parts(
+            args.arg0 as *const u8,
+            args.arg1,
+        ))
+    };
+    filesystem::ls(path);
 }
 
 pub fn sys_wait_pid(args: &SyscallArgs, context: &mut ProcessContext) {
@@ -117,4 +132,24 @@ pub fn sys_sem(args: &SyscallArgs, context: &mut ProcessContext) {
 
 pub fn sys_get_pid() -> u16 {
     get_pid().0
+}
+
+pub fn sys_open_file(args: &SyscallArgs) -> usize {
+    let path = unsafe {
+        core::str::from_utf8_unchecked(core::slice::from_raw_parts(
+            args.arg0 as *const u8,
+            args.arg1,
+        ))
+    };
+    open_file(&path) as usize
+}
+
+pub fn sys_close_file(args: &SyscallArgs) -> bool {
+    let fd = args.arg0 as u8;
+    close_file(fd)
+}
+
+pub fn sys_cat(args: &SyscallArgs) {
+    let fd = args.arg0 as u8;
+    cat(fd);
 }

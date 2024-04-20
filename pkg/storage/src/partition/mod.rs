@@ -74,9 +74,6 @@ where
         } else {
             self.inner.read_block(offset + self.offset, block)
         }
-
-        // FIXME: calculate the block offset for inner device
-        // FIXME: read from the inner device
     }
 
     fn write_block(&self, offset: usize, block: &B) -> Result<()> {
@@ -85,8 +82,5 @@ where
         } else {
             self.inner.write_block(offset + self.offset, block)
         }
-
-        // FIXME: calculate the block offset for inner device
-        // FIXME: write to the inner device
     }
 }

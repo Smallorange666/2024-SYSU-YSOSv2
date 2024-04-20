@@ -405,6 +405,26 @@ impl ProcessInner {
             proc_data: Some(child_proc_data),
         }
     }
+
+    pub fn open_file(&mut self, path: &str) -> u8 {
+        self.proc_data.as_mut().unwrap().open_file(path)
+    }
+
+    pub fn close_file(&mut self, fd: u8) -> bool {
+        self.proc_data.as_mut().unwrap().close_file(fd)
+    }
+
+    pub fn cat(&mut self, fd: u8) {
+        let buf = &mut [0u8; 4096];
+        loop {
+            let len = self.proc_data.as_mut().unwrap().read(fd, buf);
+            if len <= 0 {
+                break;
+            }
+            print!("{}", core::str::from_utf8(buf).unwrap());
+        }
+        println!()
+    }
 }
 
 impl core::ops::Deref for Process {

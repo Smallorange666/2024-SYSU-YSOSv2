@@ -7,8 +7,6 @@
 mod bus;
 mod consts;
 
-use core::fmt::write;
-
 use alloc::{boxed::Box, string::String};
 use bus::AtaBus;
 use consts::AtaDeviceType;
@@ -50,16 +48,12 @@ impl AtaDrive {
         // we only support PATA drives
         if let Ok(AtaDeviceType::Pata(res)) = BUSES[bus as usize].lock().identify_drive(drive) {
             let buf = res.map(u16::to_be_bytes).concat();
-            // FIXME: get the serial from buf
             let serial = String::from_utf8_lossy(&buf[SERIAL..SERIAL + SERIAL_SIZE])
                 .trim()
                 .into();
-            // FIXME: get the model from buf
             let model = String::from_utf8_lossy(&buf[MODEL..MODEL + MODEL_SIZE])
                 .trim()
                 .into();
-
-            // FIXME: get the block count from buf
             let blocks =
                 u32::from_be_bytes(buf[MAX_LBA..MAX_LBA + 4].try_into().unwrap()).rotate_left(16);
             let ata_drive = Self {
@@ -97,26 +91,18 @@ use storage::{Block512, BlockDevice};
 
 impl BlockDevice<Block512> for AtaDrive {
     fn block_count(&self) -> storage::Result<usize> {
-        // FIXME: return the block count
-
         Ok(self.blocks as usize)
     }
 
     fn read_block(&self, offset: usize, block: &mut Block512) -> storage::Result<()> {
-        // FIXME: read the block
-        //      - use `BUSES` and `self` to get bus
-        //      - use `read_pio` to get data
         BUSES[self.bus as usize]
             .lock()
-            .read_pio(self.drive, 0, block.as_mut())
+            .read_pio(self.drive, offset as u32, block.as_mut())
     }
 
     fn write_block(&self, offset: usize, block: &Block512) -> storage::Result<()> {
-        // FIXME: write the block
-        //      - use `BUSES` and `self` to get bus
-        //      - use `write_pio` to write data
         BUSES[self.bus as usize]
             .lock()
-            .write_pio(self.drive, 0, block.as_ref())
+            .write_pio(self.drive, offset as u32, block.as_ref())
     }
 }

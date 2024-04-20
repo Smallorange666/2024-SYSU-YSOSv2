@@ -1,23 +1,21 @@
-use core::ops::Add;
+use core::{cmp::min, f32::INFINITY, ops::Add};
 
 use super::*;
 
 impl Fat16Impl {
     pub fn new(inner: impl BlockDevice<Block512>) -> Self {
         let mut block = Block::default();
-        let block_size = Block512::size();
 
         inner.read_block(0, &mut block).unwrap();
         let bpb = Fat16Bpb::new(block.as_ref()).unwrap();
 
         trace!("Loading Fat16 Volume: {:#?}", bpb);
 
-        // HINT: FirstDataSector = BPB_ResvdSecCnt + (BPB_NumFATs * FATSz) + RootDirSectors;
         let fat_start = bpb.reserved_sector_count() as usize;
-        let root_dir_size = bpb.root_entries_count() as usize * 2;
+        let root_dir_sector_num = bpb.root_entries_count() as usize * 32 / BLOCK_SIZE;
         let first_root_dir_sector =
             fat_start + (bpb.fat_count() as usize * bpb.sectors_per_fat() as usize);
-        let first_data_sector = first_root_dir_sector + root_dir_size;
+        let first_data_sector = first_root_dir_sector + root_dir_sector_num;
 
         Self {
             bpb,
@@ -28,111 +26,117 @@ impl Fat16Impl {
         }
     }
 
+    // calculate the first sector of the cluster
     pub fn cluster_to_first_sector(&self, cluster: &Cluster) -> usize {
         match *cluster {
             Cluster::ROOT_DIR => self.first_root_dir_sector,
             Cluster(c) => {
-                // FIXME: calculate the first sector of the cluster
-                // HINT: FirstSectorofCluster = ((N – 2) * BPB_SecPerClus) + FirstDataSector;
+                // calculate the first sector of the cluster
                 ((c - 2) * self.bpb.sectors_per_cluster() as u32 + self.first_data_sector as u32)
                     as usize
             }
         }
     }
 
-    // FIXME: YOU NEED TO IMPLEMENT THE FILE SYSTEM OPERATIONS HERE
-    //      - calculate the sectors and the clusters
-    //      - read the FAT and get cluster chain
-    //      - traverse the cluster chain and read the data
-    //      - parse the directory entries
-    //      - ...
-    //      - finally, implement the FileSystem trait for Fat16 with `self.handle`
+    // read the FAT and get next
     pub fn get_next_cluster(&self, cluster: &Cluster) -> Result<Cluster> {
-        let mut current = cluster;
-        let mut block = Block::default();
-        self.inner.read_block(self.fat_start, &mut block).unwrap();
-        let tem = (cluster.0 * 2) as usize;
-        let next = u16::from_le_bytes(block[tem..tem + 2].try_into().unwrap()) as u32;
-        match Cluster(next) {
-            Cluster::EMPTY => Ok(Cluster::EMPTY),
-            Cluster::BAD => Err(FsError::BadCluster),
-            Cluster(c) => {
-                if c >= 0x0002 && c < 0xFFF6 {
-                    Ok(Cluster(c))
-                } else if c >= 0xFFF8 && c <= 0xFFFF {
-                    Ok(Cluster::END_OF_FILE)
-                } else {
-                    Ok(Cluster::INVALID)
+        if *cluster == Cluster::ROOT_DIR {
+            return Ok(Cluster::END_OF_FILE);
+        } else {
+            let mut block = Block::default();
+            self.inner.read_block(self.fat_start, &mut block).unwrap();
+            let tem = (cluster.0 * 2) as usize;
+            let next = u16::from_le_bytes(block[tem..tem + 2].try_into().unwrap()) as u32;
+            match Cluster(next) {
+                Cluster::EMPTY => Ok(Cluster::EMPTY),
+                Cluster::BAD => Err(FsError::BadCluster),
+                Cluster(c) => {
+                    if c >= 0x0000_0002 && c < 0x0000_FFF6 {
+                        Ok(Cluster(c))
+                    } else if c >= 0xFFFF_FFF8 {
+                        Ok(Cluster::END_OF_FILE)
+                    } else {
+                        Ok(Cluster::INVALID)
+                    }
                 }
             }
         }
     }
 
-    pub fn get_dir_entry_by_name(&self, dir: &Directory, name: &str) -> Result<DirEntry> {
+    // traverse all dir entries in the dir
+    pub fn traverse_dir_entries<F>(&self, dir: &Directory, mut process_entry: F) -> Result<()>
+    where
+        F: FnMut(DirEntry) -> Result<()>,
+    {
         let mut block = Block::default();
         let mut cluster = dir.cluster;
+        let entry_per_block = BLOCK_SIZE / DirEntry::LEN;
         loop {
-            let first_sector = self.cluster_to_first_sector(&cluster);
-            for i in 0..self.bpb.sectors_per_cluster() as usize {
+            let mut now_sector = self.cluster_to_first_sector(&cluster);
+            let mut entry_num = {
+                if cluster == Cluster::ROOT_DIR {
+                    self.bpb.root_entries_count() as usize
+                } else {
+                    entry_per_block * self.bpb.sectors_per_cluster() as usize
+                }
+            };
+
+            while entry_num > 0 {
                 self.inner
-                    .read_block(first_sector + i as usize, &mut block)
+                    .read_block(now_sector as usize, &mut block)
                     .unwrap();
                 let mut offset = 0;
-                for j in 0..BLOCK_SIZE {
+                for _ in 0..min(entry_num, entry_per_block) {
                     let entry = DirEntry::parse(&block[offset..offset + DirEntry::LEN]).unwrap();
-                    if entry.is_valid() && entry.filename() == name {
-                        return Ok(entry);
+                    if entry.is_valid() {
+                        process_entry(entry)?;
+                    } else {
+                        return Ok(());
                     }
-
+                    entry_num -= 1;
                     offset += DirEntry::LEN;
                 }
-                cluster = self.get_next_cluster(&cluster)?;
+
+                now_sector += 1;
             }
+
+            cluster = self.get_next_cluster(&cluster)?;
             if cluster == Cluster::END_OF_FILE {
-                break;
+                return Ok(());
             }
         }
-        Err(FsError::FileNotFound)
+    }
+
+    pub fn get_dir_entry_by_name(&self, dir: &Directory, name: &str) -> Result<DirEntry> {
+        let parse_name = ShortFileName::parse(name)?;
+        let mut result = None;
+        self.traverse_dir_entries(dir, |entry| {
+            if entry.filename.matches(&parse_name) {
+                result = Some(entry);
+            }
+            Ok(())
+        })?;
+        result.ok_or(FsError::FileNotFound)
     }
 
     pub fn get_all_file_under_dir(
         &self,
         dir: &Directory,
     ) -> Result<Box<dyn Iterator<Item = Metadata> + Send>> {
-        let mut block = Block::default();
-        let mut cluster = dir.cluster;
         let mut entries = Vec::new();
-        loop {
-            let first_sector = self.cluster_to_first_sector(&cluster);
-            for i in 0..self.bpb.sectors_per_cluster() as usize {
-                self.inner
-                    .read_block(first_sector + i as usize, &mut block)
-                    .unwrap();
-                let mut offset = 0;
-                for j in 0..BLOCK_SIZE {
-                    let entry = DirEntry::parse(&block[offset..offset + DirEntry::LEN]).unwrap();
-                    if entry.is_valid() {
-                        entries.push(entry);
-                    }
-                    offset += DirEntry::LEN;
-                }
-                cluster = self.get_next_cluster(&cluster)?;
+        self.traverse_dir_entries(dir, |entry| {
+            if entry.is_displayable() {
+                entries.push(entry);
             }
-            if cluster == Cluster::END_OF_FILE {
-                return Ok(Box::new(
-                    entries.into_iter().map(|entry| Metadata::from(&entry)),
-                ));
-            }
-        }
+            Ok(())
+        })?;
+        Ok(Box::new(
+            entries.into_iter().map(|entry| Metadata::from(&entry)),
+        ))
     }
 
-    pub fn parse_path(&self, path: &str) -> Vec<&str> {
-        let mut parts = path.split('/').filter(|s| !s.is_empty());
-        let mut result = Vec::new();
-        while let Some(part) = parts.next() {
-            result.push(part);
-        }
-        result
+    pub fn parse_path<'a>(&self, path: &'a str) -> Vec<&'a str> {
+        path.split('/').filter(|s| !s.is_empty()).collect()
     }
 
     pub fn open_root_dir(&self) -> Directory {
@@ -145,28 +149,25 @@ impl Fat16Impl {
 
 impl FileSystem for Fat16 {
     fn read_dir(&self, path: &str) -> Result<Box<dyn Iterator<Item = Metadata> + Send>> {
-        // FIXME: read dir and return an iterator for all entries
+        // read dir and return an iterator for all entries
         let parts = self.handle.parse_path(path);
         let mut dir = self.handle.open_root_dir();
+        let mut entry: DirEntry;
         for i in 0..parts.len() {
             let part = parts[i];
-            let entry = self.handle.get_dir_entry_by_name(&dir, part)?;
-            if i == parts.len() - 1 {
-                if entry.is_directory() {
-                    return Ok(Box::new(self.handle.get_all_file_under_dir(&dir)?));
-                } else {
-                    return Err(FsError::NotADirectory);
-                }
-            } else {
+            entry = self.handle.get_dir_entry_by_name(&dir, part)?;
+            if entry.is_directory() {
                 dir = Directory::from_entry(entry);
+            } else {
+                return Err(FsError::NotADirectory);
             }
         }
 
-        Err(FsError::FileNotFound)
+        return Ok(Box::new(self.handle.get_all_file_under_dir(&dir)?));
     }
 
     fn open_file(&self, path: &str) -> Result<FileHandle> {
-        // FIXME: open file and return a file handle
+        // open file and return a file handle
         let parts = self.handle.parse_path(path);
         let mut dir = self.handle.open_root_dir();
 
@@ -191,7 +192,7 @@ impl FileSystem for Fat16 {
     }
 
     fn metadata(&self, path: &str) -> Result<Metadata> {
-        // FIXME: read metadata of the file / dir
+        // read metadata of the file / dir
         let parts = self.handle.parse_path(path);
         let mut dir = self.handle.open_root_dir();
 
@@ -209,7 +210,7 @@ impl FileSystem for Fat16 {
     }
 
     fn exists(&self, path: &str) -> Result<bool> {
-        // FIXME: check if the file / dir exists
+        // check if the file / dir exists
         let parts = self.handle.parse_path(path);
         let mut dir = self.handle.open_root_dir();
 

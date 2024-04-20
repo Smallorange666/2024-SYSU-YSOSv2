@@ -38,8 +38,7 @@ where
 
         for i in 0..4 {
             partitions.push(
-                // FIXME: parse the mbr partition from the buffer
-                //      - just ignore other fields for mbr
+                // parse the mbr partition from the buffer
                 MbrPartition::parse(
                     &buffer[(0x1BE + i * 16)..(0x1BE + (i + 1) * 16)]
                         .try_into()

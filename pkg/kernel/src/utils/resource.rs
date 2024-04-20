@@ -1,6 +1,7 @@
 use crate::drivers::input::*;
 use alloc::{collections::BTreeMap, string::String};
 use spin::Mutex;
+use storage::FileHandle;
 
 #[derive(Debug, Clone)]
 pub enum StdIO {
@@ -57,6 +58,7 @@ impl ResourceSet {
 }
 
 pub enum Resource {
+    File(FileHandle),
     Console(StdIO),
     Null,
 }
@@ -64,6 +66,13 @@ pub enum Resource {
 impl Resource {
     pub fn read(&mut self, buf: &mut [u8]) -> Option<usize> {
         match self {
+            Resource::File(file) => {
+                if let Ok(size) = file.read(buf) {
+                    Some(size)
+                } else {
+                    Some(0)
+                }
+            }
             Resource::Console(stdio) => match stdio {
                 &mut StdIO::Stdin => {
                     // just read from kernel input buffer
@@ -82,6 +91,7 @@ impl Resource {
 
     pub fn write(&mut self, buf: &[u8]) -> Option<usize> {
         match self {
+            Resource::File(_file) => Some(0),
             Resource::Console(stdio) => match *stdio {
                 StdIO::Stdin => None,
                 StdIO::Stdout => {
@@ -101,6 +111,7 @@ impl Resource {
 impl core::fmt::Debug for Resource {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            Resource::File(file) => write!(f, "File({:?})", file),
             Resource::Console(stdio) => write!(f, "Console({:?})", stdio),
             Resource::Null => write!(f, "Null"),
         }

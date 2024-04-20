@@ -1,7 +1,4 @@
-use crate::{
-    memory::gdt,
-    proc::{self, *},
-};
+use crate::{memory::gdt, proc::*};
 use alloc::format;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 
@@ -66,11 +63,23 @@ pub fn dispatcher(context: &mut ProcessContext) {
         // pid: arg0 as u16 -> status: isize
         // block itself and wait until the process exit and be woke up
         Syscall::WaitPid => sys_wait_pid(&args, context),
+        // path: &str (ptr: arg0 as *const u8, len: arg1) -> fd: u8
+        // open file and return fd
+        Syscall::Open => context.set_rax(sys_open_file(&args)),
+        // fd: arg0 as u8 -> ret: isize
+        // close file by fd
+        Syscall::Close => context.set_rax(sys_close_file(&args) as usize),
+        // fd: arg0 as u8
+        // get file content by fd
+        Syscall::Cat => sys_cat(&args),
 
         // None
         Syscall::Stat => sys_list_process(),
         // None
-        Syscall::ListApp => proc::list_app(),
+        Syscall::ListApp => sys_list_app(),
+        // path: &str (arg0 as *const u8, arg1 as len)
+        // list directory by path
+        Syscall::ListDir => sys_list_dir(&args),
         // layout: arg0 as *const Layout -> ptr: *mut u8
         Syscall::Allocate => context.set_rax(sys_allocate(&args)),
         // ptr: arg0 as *mut u8

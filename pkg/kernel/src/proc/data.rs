@@ -1,11 +1,12 @@
 use alloc::{collections::BTreeMap, string::String, sync::Arc};
 use spin::RwLock;
+use storage::FileSystem;
 use x86_64::{
     structures::paging::{page::PageRange, Page},
     VirtAddr,
 };
 
-use crate::resource::*;
+use crate::{filesystem::get_rootfs, resource::*};
 
 use super::*;
 use sync::SemaphoreSet;
@@ -85,5 +86,14 @@ impl ProcessData {
 
     pub fn remove_sem(&self, key: u32) -> bool {
         self.semaphores.write().remove(key)
+    }
+
+    pub fn open_file(&self, path: &str) -> u8 {
+        let handle = get_rootfs().open_file(path).unwrap();
+        self.resources.write().open(Resource::File(handle))
+    }
+
+    pub fn close_file(&self, fd: u8) -> bool {
+        self.resources.write().close(fd)
     }
 }

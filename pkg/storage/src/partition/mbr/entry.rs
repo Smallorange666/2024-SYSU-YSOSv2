@@ -16,38 +16,22 @@ impl MbrPartition {
             data: data.to_owned(),
         }
     }
+    pub fn is_active(&self) -> bool {
+        self.status() == 0x80
+    }
 
-    // FIXME: define other fields in the MbrPartition
-    //      - use `define_field!` macro
-    //      - ensure you can pass the tests
-    //      - you may change the field names if you want
-    //
-    //  NOTE: some fields are not ;aligned with byte.
-    //      define your functions to extract values:
-    //
-    //      0x02 - 0x03 begin sector & begin cylinder
-    //      0x06 - 0x07 end sector & end cylinder
-
-    // an example of how to define a field
-    // move your mouse on the `define_field!` to see the docs
     define_field!(u8, 0x00, status);
     define_field!(u8, 0x01, begin_head);
     define_field!(u8, 0x04, partition_type);
     define_field!(u8, 0x05, end_head);
     define_field!(u32, 0x08, begin_lba);
     define_field!(u32, 0x0C, total_lba);
-
-    pub fn is_active(&self) -> bool {
-        self.status() == 0x80
-    }
-
     pub fn begin_sector(&self) -> u8 {
         self.data[0x02] & 0b0011_1111
     }
     pub fn begin_cylinder(&self) -> u16 {
         ((self.data[0x02] & 0b1100_0000) as u16) << 2 | self.data[0x03] as u16
     }
-
     pub fn end_sector(&self) -> u8 {
         self.data[0x06] & 0b0011_1111
     }
