@@ -5,17 +5,17 @@ use crate::{filesystem, proc};
 use core::alloc::Layout;
 
 pub fn sys_spawn_process(args: &SyscallArgs) -> usize {
-    // get app name by args
+    // get app by path
     // - core::str::from_utf8_unchecked
     // - core::slice::from_raw_parts
-    let name = unsafe {
+    let path = unsafe {
         core::str::from_utf8_unchecked(core::slice::from_raw_parts(
             args.arg0 as *const u8,
             args.arg1,
         ))
     };
     // spawn the process by name
-    let ret = proc::spawn(name);
+    let ret = proc::spawn(path);
     // handle spawn error, return 0 if failed
     if ret.is_none() {
         return 0;
@@ -147,9 +147,4 @@ pub fn sys_open_file(args: &SyscallArgs) -> usize {
 pub fn sys_close_file(args: &SyscallArgs) -> bool {
     let fd = args.arg0 as u8;
     close_file(fd)
-}
-
-pub fn sys_cat(args: &SyscallArgs) {
-    let fd = args.arg0 as u8;
-    cat(fd);
 }

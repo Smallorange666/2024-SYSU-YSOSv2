@@ -288,8 +288,4 @@ impl ProcessManager {
     pub fn close_file(&self, fd: u8) -> bool {
         self.current().write().close_file(fd)
     }
-
-    pub fn cat(&self, fd: u8) {
-        self.current().write().cat(fd)
-    }
 }

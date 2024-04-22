@@ -55,7 +55,7 @@ impl Read for File {
 
             buf[read_bytes..read_bytes + bytes_to_read]
                 .copy_from_slice(&block[byte_offset..byte_offset + bytes_to_read]);
-
+            
             read_bytes += bytes_to_read;
             self.offset += bytes_to_read;
             if read_bytes == buf.len() || self.offset == self.entry.size as usize {
@@ -69,7 +69,7 @@ impl Read for File {
                 }
             }
         }
-        return Ok(read_bytes);
+        Ok(read_bytes)
     }
 }
 

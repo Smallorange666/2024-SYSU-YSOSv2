@@ -19,7 +19,7 @@ fn main() -> isize {
                 println!("\"la\" to list all the apps");
                 println!("\"ls /path/to/your/dir \" to list all the files in directory");
                 println!("\"cat /path/to/your/dir \" to check the content of the file");
-                println!("\"run your_app_name\" to run the app");
+                println!("\"run /path/to/your/app \" to run the app");
                 println!("\"ps\" to list all the processes");
                 println!("\"info\" to print current process info");
                 println!("\"exit\" to exit the shell");
@@ -32,18 +32,24 @@ fn main() -> isize {
             }
             "cat" => {
                 let fd = sys_open_file(command.next().unwrap_or(""));
-                sys_cat(fd);
+                let buf = &mut [0u8; 1024];
+                sys_read(fd, buf);
+                println!(
+                    "{}",
+                    core::str::from_utf8(buf).unwrap_or("Failed to read file")
+                );
                 sys_close_file(fd);
             }
             "run" => {
-                let app_name = command.next().unwrap();
-                let pid = sys_spawn(app_name);
+                let path = command.next().unwrap();
+                let name: vec::Vec<&str> = path.rsplit('/').collect();
+                let pid = sys_spawn(path);
                 if pid == 0 {
-                    println!("Failed to run app: {}", app_name);
+                    println!("Failed to run app: {}", name[0]);
                     continue;
                 } else {
                     sys_stat();
-                    println!("{} exited with {}", app_name, sys_wait_pid(pid));
+                    println!("{} exited with {}", name[0], sys_wait_pid(pid));
                 }
             }
             "ps" => {

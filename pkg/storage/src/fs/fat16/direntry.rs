@@ -97,11 +97,11 @@ impl DirEntry {
 fn prase_datetime(time: u32) -> FsTime {
     // parse the year, month, day, hour, min, sec from time
     let year = ((time >> 25) & 0x7F) as i32 + 1980;
-    let month = ((time >> 21) & 0x0F) as u32;
-    let day = ((time >> 16) & 0x1F) as u32;
-    let hour = ((time >> 11) & 0x1F) as u32;
-    let min = ((time >> 5) & 0x3F) as u32;
-    let sec = ((time & 0x1F) * 2) as u32;
+    let month = (time >> 21) & 0x0F;
+    let day = (time >> 16) & 0x1F;
+    let hour = (time >> 11) & 0x1F;
+    let min = (time >> 5) & 0x3F;
+    let sec = (time & 0x1F) * 2;
 
     if let Single(time) = Utc.with_ymd_and_hms(year, month, day, hour, min, sec) {
         time

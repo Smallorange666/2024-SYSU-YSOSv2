@@ -41,7 +41,7 @@ impl Fat16Impl {
     // read the FAT and get next
     pub fn get_next_cluster(&self, cluster: &Cluster) -> Result<Cluster> {
         if *cluster == Cluster::ROOT_DIR {
-            return Ok(Cluster::END_OF_FILE);
+            Ok(Cluster::END_OF_FILE)
         } else {
             let mut block = Block::default();
             self.inner.read_block(self.fat_start, &mut block).unwrap();
@@ -51,7 +51,7 @@ impl Fat16Impl {
                 Cluster::EMPTY => Ok(Cluster::EMPTY),
                 Cluster::BAD => Err(FsError::BadCluster),
                 Cluster(c) => {
-                    if c >= 0x0000_0002 && c < 0x0000_FFF6 {
+                    if (0x0000_0002..0x0000_FFF6).contains(&c) {
                         Ok(Cluster(c))
                     } else if c >= 0xFFFF_FFF8 {
                         Ok(Cluster::END_OF_FILE)
@@ -82,9 +82,7 @@ impl Fat16Impl {
             };
 
             while entry_num > 0 {
-                self.inner
-                    .read_block(now_sector as usize, &mut block)
-                    .unwrap();
+                self.inner.read_block(now_sector, &mut block).unwrap();
                 let mut offset = 0;
                 for _ in 0..min(entry_num, entry_per_block) {
                     let entry = DirEntry::parse(&block[offset..offset + DirEntry::LEN]).unwrap();
@@ -153,8 +151,7 @@ impl FileSystem for Fat16 {
         let parts = self.handle.parse_path(path);
         let mut dir = self.handle.open_root_dir();
         let mut entry: DirEntry;
-        for i in 0..parts.len() {
-            let part = parts[i];
+        for part in parts {
             entry = self.handle.get_dir_entry_by_name(&dir, part)?;
             if entry.is_directory() {
                 dir = Directory::from_entry(entry);
@@ -163,7 +160,7 @@ impl FileSystem for Fat16 {
             }
         }
 
-        return Ok(Box::new(self.handle.get_all_file_under_dir(&dir)?));
+        Ok(Box::new(self.handle.get_all_file_under_dir(&dir)?))
     }
 
     fn open_file(&self, path: &str) -> Result<FileHandle> {

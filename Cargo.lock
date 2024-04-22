@@ -70,6 +70,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fork"
+version = "0.1.0"
+dependencies = [
+ "yslib",
+]
+
+[[package]]
 name = "hex-literal"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -264,7 +271,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "sem"
+version = "0.1.0"
+dependencies = [
+ "yslib",
+]
+
+[[package]]
 name = "sh"
+version = "0.1.0"
+dependencies = [
+ "yslib",
+]
+
+[[package]]
+name = "spin"
 version = "0.1.0"
 dependencies = [
  "yslib",
@@ -314,27 +335,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "test_fork"
-version = "0.1.0"
-dependencies = [
- "yslib",
-]
-
-[[package]]
-name = "test_sem"
-version = "0.1.0"
-dependencies = [
- "yslib",
-]
-
-[[package]]
-name = "test_spin"
-version = "0.1.0"
-dependencies = [
- "yslib",
 ]
 
 [[package]]

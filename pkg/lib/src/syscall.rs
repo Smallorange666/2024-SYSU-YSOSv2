@@ -120,8 +120,3 @@ pub fn sys_open_file(path: &str) -> u8 {
 pub fn sys_close_file(fd: u8) -> bool {
     syscall!(Syscall::Close, fd as u64) == 0
 }
-
-#[inline(always)]
-pub fn sys_cat(fd: u8) {
-    syscall!(Syscall::Cat, fd as u64);
-}

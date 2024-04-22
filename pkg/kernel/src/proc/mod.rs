@@ -7,11 +7,13 @@ mod process;
 mod processor;
 mod sync;
 
+use crate::filesystem::get_rootfs;
 use crate::memory::PAGE_SIZE;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 pub use manager::*;
 use process::*;
+use storage::FileSystem;
 use xmas_elf::ElfFile;
 
 use alloc::string::{String, ToString};
@@ -143,13 +145,24 @@ pub fn list_app() {
     });
 }
 
-pub fn spawn(name: &str) -> Option<ProcessId> {
-    let app = x86_64::instructions::interrupts::without_interrupts(|| {
-        let app_list = get_process_manager().app_list()?;
-        app_list.iter().find(|&app| app.name.eq(name))
-    })?;
+// pub fn spawn(name: &str) -> Option<ProcessId> {
+//     let app = x86_64::instructions::interrupts::without_interrupts(|| {
+//         let app_list = get_process_manager().app_list()?;
+//         app_list.iter().find(|&app| app.name.eq(name))
+//     })?;
 
-    elf_spawn(name.to_string(), &app.elf)
+//     elf_spawn(name.to_string(), &app.elf)
+// }
+
+pub fn spawn(path: &str) -> Option<ProcessId> {
+    let name: Vec<&str> = path.rsplit('/').collect();
+    let mut handle = get_rootfs().open_file(path).expect("");
+    let mut buf = Vec::new();
+    let elf = {
+        handle.read_all(&mut buf).expect("");
+        ElfFile::new(buf.as_slice()).unwrap()
+    };
+    elf_spawn(name[0].to_string(), &elf)
 }
 
 pub fn elf_spawn(name: String, elf: &ElfFile) -> Option<ProcessId> {
@@ -288,8 +301,4 @@ pub fn open_file(path: &str) -> u8 {
 
 pub fn close_file(fd: u8) -> bool {
     x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().close_file(fd))
-}
-
-pub fn cat(fd: u8) {
-    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().cat(fd))
 }

@@ -55,7 +55,7 @@ pub fn dispatcher(context: &mut ProcessContext) {
         // get current pid
         Syscall::GetPid => context.set_rax(sys_get_pid() as usize),
         // path: &str (ptr: arg0 as *const u8, len: arg1) -> pid: u16
-        // spawn process from name
+        // spawn process from path
         Syscall::Spawn => context.set_rax(sys_spawn_process(&args)),
         // ret: arg0 as isize
         // exit process with retcode
@@ -69,9 +69,6 @@ pub fn dispatcher(context: &mut ProcessContext) {
         // fd: arg0 as u8 -> ret: isize
         // close file by fd
         Syscall::Close => context.set_rax(sys_close_file(&args) as usize),
-        // fd: arg0 as u8
-        // get file content by fd
-        Syscall::Cat => sys_cat(&args),
 
         // None
         Syscall::Stat => sys_list_process(),

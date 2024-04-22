@@ -28,7 +28,7 @@ const DEFAULT_CONFIG: Config = Config {
     physical_memory_offset: 0xFFFF_8000_0000_0000,
     kernel_path: "\\KERNEL.ELF",
     cmdline: "",
-    load_apps: true,
+    load_apps: false,
     log_level: "Info",
 };
 

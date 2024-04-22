@@ -1,5 +1,5 @@
 [package]
-name = "test_sem"
+name = "fork"
 version = "0.1.0"
 edition = "2021"
 

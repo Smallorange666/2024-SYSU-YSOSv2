@@ -8,12 +8,18 @@ pub trait Read {
 
     /// Read all bytes until EOF in this source, placing them into `buf`.
     fn read_all(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-        let mut _start_len = buf.len();
+        let mut read_bytes = 0;
         loop {
-            // FIXME: read data into the buffer
-            //      - extend the buffer if it's not big enough
-            //      - break if the read returns 0 or Err
-            //      - update the length of the buffer if data was read
+            let unit_buf: &mut [u8] = &mut [0u8; 1024];
+            if let Ok(len) = self.read(unit_buf) {
+                read_bytes += len;
+                buf.append(&mut unit_buf.to_vec());
+                if len == 0 {
+                    return Ok(read_bytes);
+                }
+            } else {
+                return Err(FsError::FileNotFound);
+            }
         }
     }
 }

@@ -20,7 +20,6 @@ pub enum Syscall {
     WaitPid = 61,
     Sem = 64,
 
-    Cat = 65520,
     ListDir = 65521,
     Time = 65529,
     PrintInfo = 65530,

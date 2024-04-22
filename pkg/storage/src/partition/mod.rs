@@ -70,7 +70,7 @@ where
 
     fn read_block(&self, offset: usize, block: &mut B) -> Result<()> {
         if offset >= self.size {
-            return Err(FsError::InvalidOffset);
+            Err(FsError::InvalidOffset)
         } else {
             self.inner.read_block(offset + self.offset, block)
         }
@@ -78,7 +78,7 @@ where
 
     fn write_block(&self, offset: usize, block: &B) -> Result<()> {
         if offset >= self.size {
-            return Err(FsError::InvalidOffset);
+            Err(FsError::InvalidOffset)
         } else {
             self.inner.write_block(offset + self.offset, block)
         }
