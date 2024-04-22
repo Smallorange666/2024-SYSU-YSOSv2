@@ -141,7 +141,7 @@ pub fn sys_open_file(args: &SyscallArgs) -> usize {
             args.arg1,
         ))
     };
-    open_file(&path) as usize
+    open_file(path) as usize
 }
 
 pub fn sys_close_file(args: &SyscallArgs) -> bool {

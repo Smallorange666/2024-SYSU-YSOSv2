@@ -60,8 +60,8 @@ impl ProcessData {
     }
 
     pub fn is_on_stack(&self, addr: VirtAddr) -> bool {
-        VirtAddr::new(addr.as_u64() & STACK_START_MASK)
-            == self.stack_segment.unwrap().end.start_address() - STACK_MAX_SIZE
+        addr.as_u64() & STACK_START_MASK
+            == self.stack_segment.unwrap().start.start_address().as_u64() & STACK_START_MASK
     }
 
     pub fn read(&self, fd: u8, buf: &mut [u8]) -> isize {

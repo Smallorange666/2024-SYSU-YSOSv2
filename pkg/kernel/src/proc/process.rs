@@ -116,9 +116,9 @@ impl Process {
     pub fn enlarge_stack(&self, addr: VirtAddr) {
         let new_page_num = self.cal_page_gap(addr);
         let now_page_num = self.page_num();
-        let stack_bottom = STACK_MAX
-            - (self.pid.0 - 1) as u64 * STACK_MAX_SIZE
-            - (new_page_num + now_page_num) * PAGE_SIZE;
+        let stack_bottom = Page::<Size4KiB>::containing_address(addr)
+            .start_address()
+            .as_u64();
 
         let mut page_table = self.read().page_table.as_ref().unwrap().mapper();
         let frame_allocator = &mut *get_frame_alloc_for_sure();
