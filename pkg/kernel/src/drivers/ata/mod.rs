@@ -71,12 +71,12 @@ impl AtaDrive {
         }
     }
 
-    fn humanized_size(&self) -> (f64, &'static str) {
+    fn humanized_size(&self) -> (f32, &'static str) {
         info!("Calculating humanized size for drive {}", self);
         let size = self.block_size();
         let count = self.block_count().unwrap();
         let bytes = size * count;
-        crate::memory::humanized_size(bytes as u64)
+        crate::humanized_size(bytes as u64)
     }
 }
 

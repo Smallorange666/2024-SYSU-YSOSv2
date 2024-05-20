@@ -8,11 +8,9 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::sync::Weak;
 use alloc::vec::Vec;
-use elf::map_range;
-use elf::unmap_range;
+use elf::map_pages;
 use spin::*;
-use x86_64::structures::paging::mapper::MapToError;
-use x86_64::structures::paging::page::PageRange;
+use vm::*;
 use x86_64::structures::paging::*;
 use x86_64::VirtAddr;
 
@@ -30,8 +28,8 @@ pub struct ProcessInner {
     status: ProgramStatus,
     exit_code: Option<isize>,
     context: ProcessContext,
-    page_table: Option<PageTableContext>,
     proc_data: Option<ProcessData>,
+    proc_vm: Option<ProcessVm>,
 }
 
 impl Process {
@@ -53,13 +51,14 @@ impl Process {
     pub fn new(
         name: String,
         parent: Option<Weak<Process>>,
-        page_table: PageTableContext,
+        proc_vm: Option<ProcessVm>,
         proc_data: Option<ProcessData>,
     ) -> Arc<Self> {
         let name = name.to_ascii_lowercase();
 
         // create context
         let pid = ProcessId::new();
+        let proc_vm = proc_vm.unwrap_or_else(|| ProcessVm::new(PageTableContext::new()));
 
         let inner = ProcessInner {
             name,
@@ -69,7 +68,7 @@ impl Process {
             ticks_passed: 0,
             exit_code: None,
             children: Vec::new(),
-            page_table: Some(page_table),
+            proc_vm: Some(proc_vm),
             proc_data: Some(proc_data.unwrap_or_default()),
         };
 
@@ -98,44 +97,6 @@ impl Process {
     pub fn alloc_init_stack(&self) -> VirtAddr {
         // alloc init stack base on self pid
         self.write().alloc_init_stack(self.pid.0)
-    }
-
-    pub fn page_range(&self) -> PageRange {
-        self.read().stack_segment.unwrap()
-    }
-
-    pub fn cal_page_gap(&self, addr: VirtAddr) -> u64 {
-        let nowpage = Page::<Size4KiB>::containing_address(addr);
-        self.page_range().start - nowpage
-    }
-
-    pub fn page_num(&self) -> u64 {
-        self.page_range().end - self.page_range().start
-    }
-
-    pub fn enlarge_stack(&self, addr: VirtAddr) {
-        let new_page_num = self.cal_page_gap(addr);
-        let now_page_num = self.page_num();
-        let stack_bottom = Page::<Size4KiB>::containing_address(addr)
-            .start_address()
-            .as_u64();
-
-        let mut page_table = self.read().page_table.as_ref().unwrap().mapper();
-        let frame_allocator = &mut *get_frame_alloc_for_sure();
-        map_range(
-            stack_bottom,
-            new_page_num,
-            &mut page_table,
-            frame_allocator,
-            true,
-        )
-        .expect("");
-
-        self.write()
-            .proc_data
-            .as_mut()
-            .unwrap()
-            .set_stack(VirtAddr::new(stack_bottom), now_page_num + new_page_num);
     }
 
     pub fn fork(self: &Arc<Self>) -> Arc<Self> {
@@ -196,8 +157,20 @@ impl ProcessInner {
         self.exit_code
     }
 
+    pub fn vm(&self) -> &ProcessVm {
+        self.proc_vm.as_ref().unwrap()
+    }
+
+    pub fn vm_mut(&mut self) -> &mut ProcessVm {
+        self.proc_vm.as_mut().unwrap()
+    }
+
+    pub fn handle_page_fault(&mut self, addr: VirtAddr) -> bool {
+        self.vm_mut().handle_page_fault(addr)
+    }
+
     pub fn clone_page_table(&self) -> PageTableContext {
-        self.page_table.as_ref().unwrap().clone_l4()
+        self.vm().page_table.clone_l4()
     }
 
     pub fn is_ready(&self) -> bool {
@@ -229,7 +202,11 @@ impl ProcessInner {
         self.resume();
         self.context.restore(context);
         // restore the process's page table
-        self.page_table.as_ref().unwrap().load();
+        self.vm().page_table.load();
+    }
+
+    pub fn init_stack_frame(&mut self, entry: VirtAddr, stack_top: VirtAddr) {
+        self.context.init_stack_frame(entry, stack_top)
     }
 
     pub fn parent(&self) -> Option<Arc<Process>> {
@@ -264,36 +241,20 @@ impl ProcessInner {
 
         // take and drop unused resources
         // recycle process stack
-        let stack = self.proc_data.as_ref().unwrap().stack_segment.unwrap();
-        let frame_allocator = &mut *get_frame_alloc_for_sure();
-        let mut page_table = self.page_table.as_ref().unwrap().mapper();
-        unmap_range(stack.start, stack.end, &mut page_table, frame_allocator);
-
-        self.page_table.take();
+        self.proc_vm.take();
+        self.proc_data.take();
     }
 
     pub fn alloc_init_stack(&mut self, pid: u16) -> VirtAddr {
-        let stack_bottom = STACK_MAX - (pid - 1) as u64 * STACK_MAX_SIZE - STACK_DEF_SIZE;
-        let mut page_table = self.page_table.as_ref().unwrap().mapper();
+        let mut page_table = self.vm().page_table.mapper();
         let frame_allocator = &mut *get_frame_alloc_for_sure();
+        let stack_bottom = STACK_MAX - (pid - 1) as u64 * STACK_MAX_SIZE - STACK_DEF_SIZE;
         trace!("stack_bottom: {:x}", stack_bottom);
-        map_range(
-            stack_bottom,
-            STACK_DEF_PAGE,
-            &mut page_table,
-            frame_allocator,
-            true,
-        )
-        .expect("");
-
-        let stack_top = VirtAddr::new(stack_bottom + STACK_DEF_SIZE - 8);
-
-        self.proc_data
-            .as_mut()
-            .unwrap()
-            .set_stack(VirtAddr::new(stack_bottom), STACK_DEF_PAGE);
-
-        stack_top
+        self.vm_mut()
+            .stack
+            .init(&mut page_table, frame_allocator, ProcessId(pid));
+        info!("2");
+        VirtAddr::new(stack_bottom + STACK_DEF_SIZE - 8)
     }
 
     pub fn init_child_stack(
@@ -302,13 +263,13 @@ impl ProcessInner {
         child_page_table: &PageTableContext,
     ) -> (u64, u64) {
         let parent = parent.upgrade().unwrap();
-        let parent_stack = self.stack_segment.unwrap();
+        let parent_stack = &self.vm().stack;
         let count = parent.pid().0 + self.children.len() as u16;
         let mut child_stack_bottom =
             STACK_MAX - (count - 1) as u64 * STACK_MAX_SIZE - STACK_DEF_SIZE;
-        let child_stack_count = parent_stack.end - parent_stack.start;
         let frame_allocator = &mut *get_frame_alloc_for_sure();
-        while map_range(
+        let child_stack_count = parent_stack.usage();
+        while map_pages(
             child_stack_bottom,
             child_stack_count,
             &mut child_page_table.mapper(),
@@ -322,7 +283,7 @@ impl ProcessInner {
         }
 
         Self::clone_range(
-            parent_stack.start.start_address().as_u64(),
+            parent_stack.bottom().as_u64(),
             child_stack_bottom,
             child_stack_count as usize,
         );
@@ -330,33 +291,17 @@ impl ProcessInner {
         (child_stack_bottom, child_stack_count)
     }
 
-    pub fn load_elf(
-        &mut self,
-        elf: &ElfFile,
-        physical_offset: u64,
-        frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-        user_access: bool,
-    ) -> Result<(), MapToError<Size4KiB>> {
-        let mut page_table = self.page_table.as_ref().unwrap().mapper();
-        elf::load_elf(
-            elf,
-            physical_offset,
-            &mut page_table,
-            frame_allocator,
-            user_access,
-            &mut self.proc_data.as_mut().unwrap().code_segment_pages,
-        )
+    pub fn load_elf(&mut self, elf: &ElfFile, pid: ProcessId) -> VirtAddr {
+        self.vm_mut().load_elf(elf, pid)
     }
 
     pub fn print_info(&self) {
         println!("Process: {}", self.name);
         println!("Ticks: {}", self.ticks_passed);
-        let (size, unit) = crate::memory::humanized_size(
-            self.proc_data.as_ref().unwrap().code_segment_pages * PAGE_SIZE,
-        );
+        let (size, unit) =
+            crate::humanized_size(self.proc_data.as_ref().unwrap().code_segment_pages * PAGE_SIZE);
         println!("Code Segment Memory Usage: {:>7.*} {}", 3, size, unit);
-        let stack = self.proc_data.as_ref().unwrap().stack_segment.unwrap();
-        let (size, unit) = crate::memory::humanized_size((stack.end - stack.start) * PAGE_SIZE);
+        let (size, unit) = crate::humanized_size(self.vm().stack.usage() * PAGE_SIZE);
         println!("Prcoess Memory Usage: {:>7.*} {}", 3, size, unit);
     }
 
@@ -377,21 +322,31 @@ impl ProcessInner {
     }
     pub fn fork(&mut self, parent: Weak<Process>) -> ProcessInner {
         // clone the process data struct
-        let mut child_proc_data = self.proc_data.as_ref().unwrap().clone();
+        let child_proc_data = self.proc_data.as_ref().unwrap().clone();
+
         // clone the page table context (see instructions)
-        let child_page_table = self.page_table.as_ref().unwrap().fork();
+        let child_page_table = self.vm().page_table.fork();
+
         // alloc & map new stack for child (see instructions)
         // copy the *entire stack* from parent to child
         let (child_stack_bottom, child_stack_count) =
             self.init_child_stack(&parent, &child_page_table);
+
         // update child's stack frame
         let mut child_context = self.context;
         let child_stack_top =
             (self.context.stack_top() & 0xFFFFFFFF) | child_stack_bottom & !(0xFFFFFFFF);
         child_context.update_stack_frame(VirtAddr::new(child_stack_top));
-        child_proc_data.set_stack(VirtAddr::new(child_stack_bottom), child_stack_count);
+
+        let mut proc_vm = ProcessVm::new(child_page_table);
+        proc_vm.stack = Stack::new(
+            Page::containing_address(VirtAddr::new(child_stack_top)),
+            child_stack_count,
+        );
+
         // set the return value 0 for child with `context.set_rax`
         child_context.set_rax(0);
+
         // construct the child process inner
         ProcessInner {
             name: self.name.clone(),
@@ -401,7 +356,7 @@ impl ProcessInner {
             status: ProgramStatus::Ready,
             exit_code: None,
             context: child_context,
-            page_table: Some(child_page_table),
+            proc_vm: Some(proc_vm),
             proc_data: Some(child_proc_data),
         }
     }
@@ -443,26 +398,20 @@ impl core::ops::DerefMut for ProcessInner {
 
 impl core::fmt::Debug for Process {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let mut f = f.debug_struct("Process");
-        f.field("pid", &self.pid);
-
         let inner = self.inner.read();
-        f.field("name", &inner.name);
-        f.field("parent", &inner.parent().map(|p| p.pid));
-        f.field("status", &inner.status);
-        f.field("ticks_passed", &inner.ticks_passed);
-        f.field(
-            "children",
-            &inner.children.iter().map(|c| c.pid.0).collect::<Vec<u16>>(),
-        );
-        f.field("page_table", &inner.page_table);
-        f.field("status", &inner.status);
-        f.field("context", &inner.context);
-        f.field("stack", &inner.proc_data.as_ref().map(|d| d.stack_segment));
-        f.finish()
+        f.debug_struct("Process")
+            .field("pid", &self.pid)
+            .field("name", &inner.name)
+            .field("parent", &inner.parent().map(|p| p.pid))
+            .field("status", &inner.status)
+            .field("ticks_passed", &inner.ticks_passed)
+            .field("children", &inner.children.iter().map(|c| c.pid.0))
+            .field("status", &inner.status)
+            .field("context", &inner.context)
+            .field("vm", &inner.proc_vm)
+            .finish()
     }
 }
-
 impl core::fmt::Display for Process {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let inner = self.inner.read();

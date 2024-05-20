@@ -8,7 +8,7 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 use alloc::vec;
-use elf::{load_elf, map_physical_memory, map_range};
+use elf::{load_elf, map_pages, map_physical_memory};
 use uefi::prelude::*;
 use x86_64::registers::control::*;
 use ysos_boot::*;
@@ -92,12 +92,11 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         &mut page_table,
         &mut frame_allocator,
         false,
-        &mut 0,
     )
     .expect("");
 
     // Map kernel stack
-    map_range(
+    map_pages(
         config.kernel_stack_address,
         config.kernel_stack_size,
         &mut page_table,

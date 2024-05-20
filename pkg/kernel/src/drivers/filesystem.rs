@@ -61,7 +61,7 @@ pub fn ls(root_path: &str) {
         if filetype == "Directory" {
             name.push('/');
         }
-        let (num, unit) = crate::memory::humanized_size(meta.len as u64);
+        let (num, unit) = crate::humanized_size(meta.len as u64);
         let size = format!("{:.2} {}", num, unit);
         let created_time = meta
             .created

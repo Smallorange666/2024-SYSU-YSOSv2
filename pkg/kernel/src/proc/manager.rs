@@ -1,5 +1,3 @@
-use crate::memory::{get_frame_alloc_for_sure, PHYSICAL_OFFSET};
-
 use super::*;
 
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -121,34 +119,25 @@ impl ProcessManager {
     ) -> ProcessId {
         let kproc = self.get_proc(&KERNEL_PID).unwrap();
         let page_table = kproc.read().clone_page_table();
-        let proc = Process::new(name, parent, page_table, proc_data);
+        let proc_vm = Some(ProcessVm::new(page_table));
+        let proc = Process::new(name, parent, proc_vm, proc_data);
         let pid = proc.pid();
         let mut inner = proc.write();
 
         // load elf to process pagetable
-        inner
-            .load_elf(
-                elf,
-                *PHYSICAL_OFFSET.get().unwrap(),
-                &mut *get_frame_alloc_for_sure(),
-                true,
-            )
-            .expect("");
+        let stack_top = inner.load_elf(elf, pid);
         drop(inner);
 
-        // alloc new stack for process
-        let stack_top = proc.alloc_init_stack();
-        trace!("entry: {:x}", elf.header.pt2.entry_point());
         let entry = VirtAddr::new(elf.header.pt2.entry_point());
-        proc.write().context().init_stack_frame(entry, stack_top);
+        trace!("entry: {:x}", entry);
+        proc.write().init_stack_frame(entry, stack_top);
 
         // mark process as ready
         proc.write().pause();
         trace!("New {:#?}", &proc);
-
         // something like kernel thread
-        self.add_proc(proc.pid(), proc.clone());
-        self.push_ready(proc.pid());
+        self.add_proc(pid, proc);
+        self.push_ready(pid);
 
         pid
     }
@@ -190,13 +179,12 @@ impl ProcessManager {
     pub fn handle_page_fault(&self, addr: VirtAddr, err_code: PageFaultErrorCode) -> bool {
         // handle page fault
         let nowproc = self.current();
-        if !nowproc.read().is_on_stack(addr)
-            || err_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION)
-        {
-            false
-        } else {
-            nowproc.enlarge_stack(addr);
+        if !err_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION) {
+            let mut inner = nowproc.write();
+            inner.handle_page_fault(addr);
             true
+        } else {
+            false
         }
     }
 

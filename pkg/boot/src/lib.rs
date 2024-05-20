@@ -38,7 +38,7 @@ pub struct App<'a> {
 }
 
 pub type AppList = ArrayVec<App<'static>, MAX_APPLIST_LEN>;
-pub type AppListRef = Option<&'static AppList>;
+pub type AppListRef = Option<&'static ArrayVec<App<'static>, 16>>;
 /// This structure represents the information that the bootloader passes to the kernel.
 pub struct BootInfo<'a> {
     /// The memory map
@@ -54,7 +54,7 @@ pub struct BootInfo<'a> {
     pub log_level: &'a str,
 
     // Loaded apps
-    pub loaded_apps: Option<AppList>,
+    pub loaded_apps: Option<ArrayVec<App<'static>, 16>>,
 }
 
 /// Get current page table from CR3

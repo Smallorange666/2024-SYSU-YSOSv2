@@ -1,6 +1,11 @@
 use crate::proc::PageTableContext;
 use linked_list_allocator::LockedHeap;
-use x86_64::structures::paging::{mapper::MapToError, Size4KiB};
+use x86_64::{
+    structures::paging::{
+        mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
+    },
+    VirtAddr,
+};
 
 pub const USER_HEAP_START: usize = 0x4000_0000_0000;
 pub const USER_HEAP_SIZE: usize = 1024 * 1024; // 1 MiB
@@ -15,21 +20,34 @@ pub fn init() {
 }
 
 pub fn init_user_heap() -> Result<(), MapToError<Size4KiB>> {
-    // Get current pagetable mapper
-    let mapper = &mut PageTableContext::new().mapper();
-    // Get global frame allocator
+    // let mapper = &mut *super::get_page_table_for_sure();
+    let mapper = &mut PageTableContext::new().mapper(); // Get current mapper
     let frame_allocator = &mut *super::get_frame_alloc_for_sure();
 
-    // use elf::map_range to allocate & map
-    //        frames (R/W/User Access)
-    elf::map_range(
-        USER_HEAP_START as u64,
-        USER_HEAP_PAGE as u64,
-        mapper,
-        frame_allocator,
-        true,
-    )
-    .expect("");
+    let page_range = {
+        let heap_start = VirtAddr::new(USER_HEAP_START as u64);
+        let heap_start_page = Page::containing_address(heap_start);
+        let heap_end_page = heap_start_page + USER_HEAP_PAGE as u64 - 1u64;
+        Page::range(heap_start_page, heap_end_page)
+    };
+
+    debug!(
+        "User Heap        : 0x{:016x}-0x{:016x}",
+        page_range.start.start_address().as_u64(),
+        page_range.end.start_address().as_u64()
+    );
+
+    let (size, unit) = crate::humanized_size(USER_HEAP_SIZE as u64);
+    info!("User Heap Size   : {:>7.*} {}", 3, size, unit);
+
+    for page in page_range {
+        let frame = frame_allocator
+            .allocate_frame()
+            .ok_or(MapToError::FrameAllocationFailed)?;
+        let flags =
+            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
+        unsafe { mapper.map_to(page, frame, flags, frame_allocator)?.flush() };
+    }
 
     unsafe {
         USER_ALLOCATOR

@@ -6,9 +6,10 @@ mod pid;
 mod process;
 mod processor;
 mod sync;
+mod vm;
 
 use crate::filesystem::get_rootfs;
-use crate::memory::PAGE_SIZE;
+use crate::proc::vm::ProcessVm;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 pub use manager::*;
@@ -27,25 +28,7 @@ use x86_64::VirtAddr;
 
 use sync::SemaphoreResult;
 
-// 0xffff_ff00_0000_0000 is the kernel's address space
-pub const STACK_MAX: u64 = 0x0000_4000_0000_0000;
-
-pub const STACK_MAX_PAGES: u64 = 0x100000;
-pub const STACK_MAX_SIZE: u64 = STACK_MAX_PAGES * PAGE_SIZE;
-pub const STACK_START_MASK: u64 = !(STACK_MAX_SIZE - 1);
-// [bot..0x2000_0000_0000..top..0x3fff_ffff_ffff]
-// init stack
-pub const STACK_DEF_PAGE: u64 = 1;
-pub const STACK_DEF_SIZE: u64 = STACK_DEF_PAGE * PAGE_SIZE;
-pub const STACK_INIT_BOT: u64 = STACK_MAX - STACK_DEF_SIZE;
-pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
-// [bot..0xffffff0100000000..top..0xffffff01ffffffff]
-// kernel stack
-pub const KSTACK_MAX: u64 = 0xffff_ff02_0000_0000;
-pub const KSTACK_DEF_PAGE: u64 = 512;
-pub const KSTACK_DEF_SIZE: u64 = KSTACK_DEF_PAGE * PAGE_SIZE;
-pub const KSTACK_INIT_BOT: u64 = KSTACK_MAX - KSTACK_DEF_SIZE;
-pub const KSTACK_INIT_TOP: u64 = KSTACK_MAX - 8;
+use vm::stack::*;
 
 pub const KERNEL_PID: ProcessId = ProcessId(1);
 
@@ -59,22 +42,14 @@ pub enum ProgramStatus {
 
 /// init process manager
 pub fn init(boot_info: &'static boot::BootInfo) {
-    let mut kproc_data = ProcessData::new();
-    trace!("Init process data: {:#?}", kproc_data);
-    // set the kernel stack
-    kproc_data.set_stack(VirtAddr::new(KSTACK_INIT_BOT), KSTACK_DEF_SIZE);
+    let proc_vm = ProcessVm::new(PageTableContext::new()).init_kernel_vm();
 
-    trace!("Init process data: {:#?}", kproc_data);
+    trace!("Init kernel vm: {:#?}", proc_vm);
 
     // kernel process
-    let kproc = Process::new(
-        "kernel".to_string(),
-        None,
-        PageTableContext::new(),
-        Some(kproc_data),
-    );
+    let kproc = Process::new(String::from("kernel"), None, Some(proc_vm), None);
 
-    // app_list
+    kproc.write().resume();
     let app_list = boot_info.loaded_apps.as_ref();
     manager::init(kproc, app_list);
 
