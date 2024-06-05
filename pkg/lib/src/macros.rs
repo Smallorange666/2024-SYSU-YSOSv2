@@ -1,14 +1,14 @@
-use crate::alloc::string::ToString;
 use crate::errln;
-use crate::syscall::*;
+use alloc::string::ToString;
 
 #[macro_export]
 macro_rules! entry {
     ($fn:ident) => {
         #[export_name = "_start"]
         pub extern "C" fn __impl_start() {
+            lib::init(); // THIS LINE IS NEW IN LAB 7
             let ret = $fn();
-            sys_exit(ret);
+            lib::sys_exit(ret);
         }
     };
 }
@@ -17,7 +17,7 @@ macro_rules! entry {
 fn panic(info: &core::panic::PanicInfo) -> ! {
     let location = if let Some(location) = info.location() {
         alloc::format!(
-            "{}:{}:{}",
+            "{}@{}:{}",
             location.file(),
             location.line(),
             location.column()
@@ -32,6 +32,5 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     };
     errln!("\n\n\rERROR: panicked at {}\n\n\r{}", location, msg);
 
-    // after syscall, add lib::sys_exit(1);
-    sys_exit(1);
+    crate::sys_exit(1);
 }

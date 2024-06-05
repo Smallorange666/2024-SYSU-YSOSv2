@@ -1,5 +1,12 @@
+use core::ptr::copy_nonoverlapping;
+
+use elf::map_pages;
 use x86_64::{
-    structures::paging::{mapper::MapToError, page::*, Page},
+    structures::paging::{
+        mapper::{MapToError, UnmapError},
+        page::*,
+        Page,
+    },
     VirtAddr,
 };
 
@@ -14,20 +21,22 @@ use crate::memory::PAGE_SIZE;
 
 // 0xffff_ff00_0000_0000 is the kernel's address space
 pub const STACK_MAX: u64 = 0x0000_4000_0000_0000;
-
 pub const STACK_MAX_PAGES: u64 = 0x100000;
 pub const STACK_MAX_SIZE: u64 = STACK_MAX_PAGES * PAGE_SIZE;
 pub const STACK_START_MASK: u64 = !(STACK_MAX_SIZE - 1);
+
 // [bot..0x2000_0000_0000..top..0x3fff_ffff_ffff]
 // init stack
 pub const STACK_DEF_PAGE: u64 = 1;
 pub const STACK_DEF_SIZE: u64 = STACK_DEF_PAGE * PAGE_SIZE;
 pub const STACK_INIT_BOT: u64 = STACK_MAX - STACK_DEF_SIZE;
 pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
+
 // [bot..0xffffff0100000000..top..0xffffff01ffffffff]
 // kernel stack
 pub const KSTACK_MAX: u64 = 0xffff_ff02_0000_0000;
-pub const KSTACK_DEF_PAGE: u64 = 512;
+pub const KSTACK_DEF_PAGE: u64 = 11;
+pub const KSTACK_DEF_BOT: u64 = KSTACK_MAX - STACK_MAX_SIZE;
 pub const KSTACK_DEF_SIZE: u64 = KSTACK_DEF_PAGE * PAGE_SIZE;
 pub const KSTACK_INIT_BOT: u64 = KSTACK_MAX - KSTACK_DEF_SIZE;
 pub const KSTACK_INIT_TOP: u64 = KSTACK_MAX - 8;
@@ -69,7 +78,7 @@ impl Stack {
         self.usage
     }
 
-    pub fn bottom(&self) -> VirtAddr {
+    pub fn stack_min_addr(&self) -> VirtAddr {
         self.range.start.start_address()
     }
 
@@ -147,6 +156,10 @@ impl Stack {
 
         let user_access = processor::get_pid() != KERNEL_PID;
 
+        if !user_access {
+            info!("Page fault on kernel at {:#x}", addr);
+        }
+
         elf::map_pages(
             new_start_page.start_address().as_u64(),
             page_count,
@@ -163,6 +176,83 @@ impl Stack {
 
     pub fn memory_usage(&self) -> u64 {
         self.usage * crate::memory::PAGE_SIZE
+    }
+
+    pub fn clean_up(
+        &mut self,
+        mapper: MapperRef,
+        dealloc: FrameAllocatorRef,
+    ) -> Result<(), UnmapError> {
+        if self.usage == 0 {
+            warn!("Stack is empty, no need to clean up.");
+            return Ok(());
+        }
+
+        // unmap stack pages with `elf::unmap_pages`
+        elf::unmap_pages(
+            self.range.start.start_address().as_u64(),
+            self.range.count() as u64,
+            mapper,
+            dealloc,
+            true,
+        )?;
+
+        self.usage = 0;
+
+        Ok(())
+    }
+
+    pub fn fork(
+        &self,
+        mapper: MapperRef,
+        alloc: FrameAllocatorRef,
+        stack_offset_count: u64,
+    ) -> Self {
+        let mut child_stack_min = (self.range.start - stack_offset_count).start_address();
+        let child_stack_count = self.usage;
+
+        while map_pages(
+            child_stack_min.as_u64(),
+            child_stack_count,
+            mapper,
+            alloc,
+            true,
+        )
+        .is_err()
+        {
+            trace!("Map child stack to {:#x} failed.", child_stack_min);
+            child_stack_min -= STACK_MAX_SIZE; // stack grow down
+        }
+
+        Self::clone_range(
+            self.stack_min_addr().as_u64(),
+            child_stack_min.as_u64(),
+            child_stack_count as usize,
+        );
+
+        Self {
+            range: PageRange {
+                start: Page::containing_address(child_stack_min),
+                end: Page::containing_address(child_stack_min) + child_stack_count,
+            },
+            usage: self.usage(),
+        }
+    }
+
+    /// Clone a range of memory
+    ///
+    /// - `src_addr`: the address of the source memory
+    /// - `dest_addr`: the address of the target memory
+    /// - `size`: the count of pages to be cloned
+    fn clone_range(src_addr: u64, dest_addr: u64, size: usize) {
+        trace!("Clone range: {:#x} -> {:#x}", src_addr, dest_addr);
+        unsafe {
+            copy_nonoverlapping::<u8>(
+                src_addr as *mut u8,
+                dest_addr as *mut u8,
+                size * Size4KiB::SIZE as usize,
+            );
+        }
     }
 }
 

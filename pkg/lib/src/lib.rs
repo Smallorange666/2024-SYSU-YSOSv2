@@ -1,7 +1,7 @@
-#![cfg_attr(not(test), no_std)]
 #![allow(dead_code, unused_imports)]
 #![feature(panic_info_message)]
 #![feature(alloc_error_handler)]
+#![cfg_attr(not(test), no_std)]
 
 #[macro_use]
 pub mod macros;
@@ -12,17 +12,23 @@ extern crate syscall_def;
 #[macro_use]
 pub mod io;
 pub mod allocator;
+pub mod sync;
 pub extern crate alloc;
 
-pub mod sync;
-pub use sync::*;
 mod syscall;
 
-use core::{fmt::*, time::Duration};
+use core::fmt::*;
 
 pub use alloc::*;
+pub use chrono::*;
 pub use io::*;
+pub use sync::*;
 pub use syscall::*;
+
+pub fn init() {
+    #[cfg(feature = "brk_alloc")]
+    crate::allocator::init();
+}
 
 #[macro_export]
 macro_rules! print {
@@ -54,13 +60,4 @@ pub fn _print(args: Arguments) {
 #[doc(hidden)]
 pub fn _err(args: Arguments) {
     stderr().write(format!("{}", args).as_str());
-}
-
-pub fn sleep(secs: u64) {
-    let start = Duration::from_secs(sys_time());
-    let dur = Duration::from_secs(secs);
-    let mut current = start;
-    while current - start < dur {
-        current = Duration::from_secs(sys_time());
-    }
 }

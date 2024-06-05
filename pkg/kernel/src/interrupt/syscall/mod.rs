@@ -54,6 +54,8 @@ pub fn dispatcher(context: &mut ProcessContext) {
         // None -> pid: u16
         // get current pid
         Syscall::GetPid => context.set_rax(sys_get_pid() as usize),
+        // addr: arg0 as usize -> res: usize
+        Syscall::Brk => context.set_rax(sys_brk(&args) as usize),
         // path: &str (ptr: arg0 as *const u8, len: arg1) -> pid: u16
         // spawn process from path
         Syscall::Spawn => context.set_rax(sys_spawn_process(&args)),

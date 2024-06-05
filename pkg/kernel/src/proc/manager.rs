@@ -1,3 +1,6 @@
+use crate::humanized_size;
+use crate::memory::{get_frame_alloc_for_sure, PAGE_SIZE};
+
 use super::*;
 
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -213,7 +216,8 @@ impl ProcessManager {
     }
 
     pub fn print_process_list(&self) {
-        let mut output = String::from("  PID | PPID | Process Name |  Ticks  | Status \n");
+        let mut output =
+            String::from("  PID | PPID | Process Name |  Ticks  |   Memory  | Status\n");
 
         for (_, p) in self.processes.read().iter() {
             if p.read().status() != ProgramStatus::Dead {
@@ -222,6 +226,16 @@ impl ProcessManager {
         }
 
         // TODO: print memory usage of kernel heap
+        let alloc = get_frame_alloc_for_sure();
+        let frames_used = alloc.frames_used();
+        let frames_recycled = alloc.frames_recycled();
+        let frames_total = alloc.frames_total();
+
+        let used = (frames_used - frames_recycled) * PAGE_SIZE as usize;
+        let total = frames_total * PAGE_SIZE as usize;
+
+        output += &format_usage("Memory", used, total);
+        drop(alloc);
 
         output += format!("Queue  : {:?}\n", self.ready_queue.lock()).as_str();
 
@@ -276,4 +290,31 @@ impl ProcessManager {
     pub fn close_file(&self, fd: u8) -> bool {
         self.current().write().close_file(fd)
     }
+
+    pub fn brk(&self, addr: Option<VirtAddr>) -> Option<VirtAddr> {
+        let pid = get_pid();
+        if let Some(proc) = self.get_proc(&pid) {
+            proc.read().brk(addr)
+        } else {
+            None
+        }
+    }
+}
+
+// A helper function to format memory usage
+fn format_usage(name: &str, used: usize, total: usize) -> String {
+    let (used_float, used_unit) = humanized_size(used as u64);
+    let (total_float, total_unit) = humanized_size(total as u64);
+
+    format!(
+        "{:<6} : {:>6.*} {:>3} / {:>6.*} {:>3} ({:>5.2}%)\n",
+        name,
+        2,
+        used_float,
+        used_unit,
+        2,
+        total_float,
+        total_unit,
+        used as f32 / total as f32 * 100.0
+    )
 }

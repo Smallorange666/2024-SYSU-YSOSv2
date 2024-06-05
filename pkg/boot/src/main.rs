@@ -8,6 +8,7 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 use alloc::vec;
+use arrayvec::ArrayVec;
 use elf::{load_elf, map_pages, map_physical_memory};
 use uefi::prelude::*;
 use x86_64::registers::control::*;
@@ -86,19 +87,35 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
     );
 
     // Load and map the kernel elf file
-    load_elf(
-        &elf,
-        config.physical_memory_offset,
-        &mut page_table,
-        &mut frame_allocator,
-        false,
-    )
-    .expect("");
+    let kernelpages = {
+        let mut ret = ArrayVec::new();
+        if let Ok(kernelpage) = load_elf(
+            &elf,
+            config.physical_memory_offset,
+            &mut page_table,
+            &mut frame_allocator,
+            false,
+        ) {
+            ret = ArrayVec::from_iter(kernelpage.into_iter());
+        } else {
+            panic!("Fail to load kernel elf file!")
+        }
+        ret
+    };
 
     // Map kernel stack
+    let (stack_start, stack_size) = if config.kernel_stack_auto_grow > 0 {
+        let init_size = config.kernel_stack_auto_grow;
+        let init_bottom =
+            config.kernel_stack_address + (config.kernel_stack_size - init_size) * 0x1000;
+        (init_bottom, init_size)
+    } else {
+        (config.kernel_stack_address, config.kernel_stack_size)
+    };
+
     map_pages(
-        config.kernel_stack_address,
-        config.kernel_stack_size,
+        stack_start,
+        stack_size,
         &mut page_table,
         &mut frame_allocator,
         false,
@@ -125,10 +142,11 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         system_table: runtime,
         log_level: config.log_level,
         loaded_apps: apps,
+        kernel_pages: kernelpages,
     };
 
     // Align stack to 8 bytes
-    let stacktop = config.kernel_stack_address + config.kernel_stack_size * 0x1000 - 8;
+    let stacktop = stack_start + stack_size * 0x1000 - 8;
 
     // Jump to the entry point
     unsafe {

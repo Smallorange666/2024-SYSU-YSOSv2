@@ -12,6 +12,7 @@ pub use uefi::Status as UefiStatus;
 
 use arrayvec::{ArrayString, ArrayVec};
 use x86_64::registers::control::Cr3;
+use x86_64::structures::paging::page::PageRangeInclusive;
 use x86_64::structures::paging::{OffsetPageTable, PageTable};
 use x86_64::VirtAddr;
 
@@ -39,6 +40,7 @@ pub struct App<'a> {
 
 pub type AppList = ArrayVec<App<'static>, MAX_APPLIST_LEN>;
 pub type AppListRef = Option<&'static ArrayVec<App<'static>, 16>>;
+pub type KernelPages = ArrayVec<PageRangeInclusive, 8>;
 /// This structure represents the information that the bootloader passes to the kernel.
 pub struct BootInfo<'a> {
     /// The memory map
@@ -55,6 +57,9 @@ pub struct BootInfo<'a> {
 
     // Loaded apps
     pub loaded_apps: Option<ArrayVec<App<'static>, 16>>,
+
+    // Kernel pages
+    pub kernel_pages: KernelPages,
 }
 
 /// Get current page table from CR3

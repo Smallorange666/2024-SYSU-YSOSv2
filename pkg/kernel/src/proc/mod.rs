@@ -42,7 +42,7 @@ pub enum ProgramStatus {
 
 /// init process manager
 pub fn init(boot_info: &'static boot::BootInfo) {
-    let proc_vm = ProcessVm::new(PageTableContext::new()).init_kernel_vm();
+    let proc_vm = ProcessVm::new(PageTableContext::new()).init_kernel_vm(&boot_info.kernel_pages);
 
     trace!("Init kernel vm: {:#?}", proc_vm);
 
@@ -131,7 +131,7 @@ pub fn list_app() {
 
 pub fn spawn(path: &str) -> Option<ProcessId> {
     let name: Vec<&str> = path.rsplit('/').collect();
-    let mut handle = get_rootfs().open_file(path).expect("");
+    let mut handle = get_rootfs().open_file(path).expect("Cannot open file");
     let mut buf = Vec::new();
     let elf = {
         handle.read_all(&mut buf).expect("");
@@ -184,6 +184,16 @@ pub fn exit(ret: isize, context: &mut ProcessContext) {
         manager.wake_waiting(ret);
         manager.kill_self(ret);
         manager.switch_next(context);
+    })
+}
+
+pub fn brk(addr: Option<VirtAddr>) -> isize {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        match manager.brk(addr) {
+            Some(new_end) => new_end.as_u64() as isize,
+            None => -1,
+        }
     })
 }
 

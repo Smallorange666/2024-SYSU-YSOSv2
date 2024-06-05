@@ -60,7 +60,7 @@ impl<'a> Config<'a> {
         };
         match key {
             "kernel_stack_address" => self.kernel_stack_address = r16,
-            "kernel_stack_size" => self.kernel_stack_size = r10,
+            "kernel_stack_size" => self.kernel_stack_size = r16,
             "physical_memory_offset" => {
                 self.physical_memory_offset = r16;
             }

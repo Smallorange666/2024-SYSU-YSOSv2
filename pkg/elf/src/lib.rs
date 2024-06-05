@@ -297,6 +297,9 @@ pub fn load_elf(
     user_access: bool,
 ) -> Result<Vec<PageRangeInclusive>, MapToError<Size4KiB>> {
     trace!("Loading ELF file...{:?}", elf.input.as_ptr());
+
+    // use iterator and functional programming to load segments
+    // and collect the loaded pages into a vector
     elf.program_iter()
         .filter(|segment| segment.get_type().unwrap() == program::Type::Load)
         .map(|segment| {

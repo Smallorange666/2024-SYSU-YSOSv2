@@ -1,3 +1,5 @@
+use core::time::Duration;
+
 use syscall_def::Syscall;
 
 #[inline(always)]
@@ -119,4 +121,22 @@ pub fn sys_open_file(path: &str) -> u8 {
 #[inline(always)]
 pub fn sys_close_file(fd: u8) -> bool {
     syscall!(Syscall::Close, fd as u64) == 0
+}
+
+#[inline(always)]
+pub fn sys_brk(addr: Option<usize>) -> Option<usize> {
+    const BRK_FAILED: usize = !0;
+    match syscall!(Syscall::Brk, addr.unwrap_or(0)) {
+        BRK_FAILED => None,
+        ret => Some(ret),
+    }
+}
+
+pub fn sleep(secs: u64) {
+    let start = Duration::from_secs(sys_time());
+    let dur = Duration::from_secs(secs);
+    let mut current = start;
+    while current - start < dur {
+        current = Duration::from_secs(sys_time());
+    }
 }

@@ -1,3 +1,5 @@
+use x86_64::VirtAddr;
+
 use super::SyscallArgs;
 use crate::proc::*;
 use crate::runtime::get_uefi_runtime_for_sure;
@@ -127,6 +129,13 @@ pub fn sys_sem(args: &SyscallArgs, context: &mut ProcessContext) {
         2 => sem_signal(args.arg1 as u32, context),
         3 => sem_wait(args.arg1 as u32, context),
         _ => context.set_rax(usize::MAX),
+    }
+}
+
+pub fn sys_brk(args: &SyscallArgs) -> isize {
+    match args.arg0 as usize {
+        0 => brk(None),
+        addr => brk(Some(VirtAddr::new(addr as u64))),
     }
 }
 

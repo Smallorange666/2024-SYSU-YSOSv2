@@ -33,6 +33,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed570934406eb16438a4e976b1b4500774099c13b8cb96eec99f620f05090ddf"
 
 [[package]]
+name = "brk"
+version = "0.1.0"
+dependencies = [
+ "yslib",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -61,6 +68,13 @@ name = "crossbeam-utils"
 version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "248e3bacc7dc6baa3b21e405ee045c3047101a49145e7e9eca583ab4c2ca5345"
+
+[[package]]
+name = "fact"
+version = "0.1.0"
+dependencies = [
+ "yslib",
+]
 
 [[package]]
 name = "fish"
@@ -431,18 +445,6 @@ dependencies = [
 
 [[package]]
 name = "x86_64"
-version = "0.14.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b835097a84e4457323331ec5d6eb23d096066cbfb215d54096dcb4b2e85f500"
-dependencies = [
- "bit_field",
- "bitflags 2.4.2",
- "rustversion",
- "volatile 0.4.6",
-]
-
-[[package]]
-name = "x86_64"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bc79523af8abf92fb1a970c3e086c5a343f6bcc1a0eb890f575cbb3b45743df"
@@ -464,11 +466,10 @@ dependencies = [
 
 [[package]]
 name = "yslib"
-version = "0.4.0"
+version = "0.7.0"
 dependencies = [
- "spin 0.9.8",
- "x86_64 0.14.11",
- "ysos_kernel",
+ "chrono",
+ "linked_list_allocator",
  "ysos_syscall",
 ]
 
@@ -480,7 +481,7 @@ dependencies = [
  "log",
  "uefi",
  "uefi-services",
- "x86_64 0.15.1",
+ "x86_64",
  "xmas-elf",
  "ysos_elf",
 ]
@@ -490,7 +491,7 @@ name = "ysos_elf"
 version = "0.1.0"
 dependencies = [
  "log",
- "x86_64 0.15.1",
+ "x86_64",
  "xmas-elf",
 ]
 
@@ -516,7 +517,7 @@ dependencies = [
  "spin 0.9.8",
  "volatile 0.5.1",
  "x86",
- "x86_64 0.15.1",
+ "x86_64",
  "xmas-elf",
  "ysos_boot",
  "ysos_elf",

@@ -41,6 +41,10 @@ impl BootInfoFrameAllocator {
     pub fn frames_total(&self) -> usize {
         self.size
     }
+
+    pub fn frames_recycled(&self) -> usize {
+        self.recycled.len()
+    }
 }
 
 unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
@@ -58,7 +62,6 @@ impl FrameDeallocator<Size4KiB> for BootInfoFrameAllocator {
     unsafe fn deallocate_frame(&mut self, frame: PhysFrame) {
         // deallocate frame
         self.recycled.push(frame);
-        self.used -= 1;
     }
 }
 

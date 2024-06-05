@@ -1,17 +1,14 @@
-use core::ptr::copy_nonoverlapping;
-
 use super::ProcessId;
 use super::*;
+use crate::humanized_size;
 use crate::memory::*;
 use crate::proc::paging::PageTableContext;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::sync::Weak;
 use alloc::vec::Vec;
-use elf::map_pages;
 use spin::*;
 use vm::*;
-use x86_64::structures::paging::*;
 use x86_64::VirtAddr;
 
 #[derive(Clone)]
@@ -253,42 +250,7 @@ impl ProcessInner {
         self.vm_mut()
             .stack
             .init(&mut page_table, frame_allocator, ProcessId(pid));
-        info!("2");
         VirtAddr::new(stack_bottom + STACK_DEF_SIZE - 8)
-    }
-
-    pub fn init_child_stack(
-        &mut self,
-        parent: &Weak<Process>,
-        child_page_table: &PageTableContext,
-    ) -> (u64, u64) {
-        let parent = parent.upgrade().unwrap();
-        let parent_stack = &self.vm().stack;
-        let count = parent.pid().0 + self.children.len() as u16;
-        let mut child_stack_bottom =
-            STACK_MAX - (count - 1) as u64 * STACK_MAX_SIZE - STACK_DEF_SIZE;
-        let frame_allocator = &mut *get_frame_alloc_for_sure();
-        let child_stack_count = parent_stack.usage();
-        while map_pages(
-            child_stack_bottom,
-            child_stack_count,
-            &mut child_page_table.mapper(),
-            frame_allocator,
-            true,
-        )
-        .is_err()
-        {
-            trace!("Map child stack to {:#x} failed.", child_stack_bottom);
-            child_stack_bottom -= STACK_MAX_SIZE; // stack grow down
-        }
-
-        Self::clone_range(
-            parent_stack.bottom().as_u64(),
-            child_stack_bottom,
-            child_stack_count as usize,
-        );
-
-        (child_stack_bottom, child_stack_count)
     }
 
     pub fn load_elf(&mut self, elf: &ElfFile, pid: ProcessId) -> VirtAddr {
@@ -305,44 +267,21 @@ impl ProcessInner {
         println!("Prcoess Memory Usage: {:>7.*} {}", 3, size, unit);
     }
 
-    /// Clone a range of memory
-    ///
-    /// - `src_addr`: the address of the source memory
-    /// - `dest_addr`: the address of the target memory
-    /// - `size`: the count of pages to be cloned
-    fn clone_range(src_addr: u64, dest_addr: u64, size: usize) {
-        trace!("Clone range: {:#x} -> {:#x}", src_addr, dest_addr);
-        unsafe {
-            copy_nonoverlapping::<u8>(
-                src_addr as *mut u8,
-                dest_addr as *mut u8,
-                size * Size4KiB::SIZE as usize,
-            );
-        }
-    }
     pub fn fork(&mut self, parent: Weak<Process>) -> ProcessInner {
+        // calculate the real stack offset
+        let child_stack_offset = (self.children.len() as u64 + 1) * STACK_MAX_PAGES;
+
+        // FIXME: fork the process virtual memory struct
+        let proc_vm = self.proc_vm.as_ref().unwrap().fork(child_stack_offset);
+
         // clone the process data struct
         let child_proc_data = self.proc_data.as_ref().unwrap().clone();
 
-        // clone the page table context (see instructions)
-        let child_page_table = self.vm().page_table.fork();
-
-        // alloc & map new stack for child (see instructions)
-        // copy the *entire stack* from parent to child
-        let (child_stack_bottom, child_stack_count) =
-            self.init_child_stack(&parent, &child_page_table);
-
         // update child's stack frame
         let mut child_context = self.context;
-        let child_stack_top =
-            (self.context.stack_top() & 0xFFFFFFFF) | child_stack_bottom & !(0xFFFFFFFF);
+        let child_stack_top = (self.context.stack_top() & 0xFFFFFFFF)
+            | proc_vm.stack.stack_min_addr().as_u64() & !(0xFFFFFFFF);
         child_context.update_stack_frame(VirtAddr::new(child_stack_top));
-
-        let mut proc_vm = ProcessVm::new(child_page_table);
-        proc_vm.stack = Stack::new(
-            Page::containing_address(VirtAddr::new(child_stack_top)),
-            child_stack_count,
-        );
 
         // set the return value 0 for child with `context.set_rax`
         child_context.set_rax(0);
@@ -367,6 +306,10 @@ impl ProcessInner {
 
     pub fn close_file(&mut self, fd: u8) -> bool {
         self.proc_data.as_mut().unwrap().close_file(fd)
+    }
+
+    pub fn brk(&self, addr: Option<VirtAddr>) -> Option<VirtAddr> {
+        self.proc_vm.as_ref().unwrap().brk(addr)
     }
 }
 
@@ -412,16 +355,20 @@ impl core::fmt::Debug for Process {
             .finish()
     }
 }
+
 impl core::fmt::Display for Process {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let inner = self.inner.read();
+        let (size, unit) = humanized_size(inner.proc_vm.as_ref().map_or(0, |vm| vm.memory_usage()));
         write!(
             f,
-            " #{:-3} | #{:-3} | {:12} | {:7} | {:?}",
+            " #{:-3} | #{:-3} | {:12} | {:7} | {:>5.1} {} | {:?}",
             self.pid.0,
             inner.parent().map(|p| p.pid.0).unwrap_or(0),
             inner.name,
             inner.ticks_passed,
+            size,
+            unit,
             inner.status
         )?;
         Ok(())
