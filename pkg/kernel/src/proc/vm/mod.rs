@@ -56,9 +56,9 @@ impl ProcessVm {
     // See the documentation for the `KernelPages` type
     // Ignore when you not reach this part
 
-    // / Initialize kernel vm
-    // /
-    // / NOTE: this function should only be called by the first process
+    // Initialize kernel vm
+    //
+    // NOTE: this function should only be called by the first process
     pub fn init_kernel_vm(mut self, pages: &KernelPages) -> Self {
         // FIXME: record kernel code usage
         self.code = pages.iter().map(|r| *r).collect();
